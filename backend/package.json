@@ -1,0 +1,22 @@
+{
+  "name": "agent-office-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "server": "node dist/server.js",
+    "worker": "node dist/worker.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "@fastify/websocket": "^11.0.0",
+    "bullmq": "^5.30.0",
+    "fastify": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.0"
+  }
+}
