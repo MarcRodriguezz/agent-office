@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { go, selectAgent } from '../net';
 import { setState, useStore, world } from '../store';
 import type { Agent } from '../types';
+import { levelOf } from '../game/creature';
 import { Avatar, STATUS_LABEL } from './common';
 
 function useActorStatus() {
@@ -34,6 +35,7 @@ export function TopBar() {
         <button onClick={() => { void go({ kind: 'spot', id: 'meet-board' }); setState({ modal: { kind: 'tasks' } }); }}>
           📋 Tareas {openTasks > 0 && <span className="badge">{openTasks}</span>}
         </button>
+        <button onClick={() => setState({ modal: { kind: 'album' } })}>📖 Álbum de compis</button>
         <button onClick={() => { void go({ kind: 'spot', id: 'boss-desk' }); setState({ modal: { kind: 'settings' } }); }}>
           ⚙️ LLM y ajustes
         </button>
@@ -68,7 +70,7 @@ export function Roster() {
                 <Avatar appearance={a.appearance} size={34} bg={`${g.color}55`} />
                 <span>
                   <strong>{a.name}{lead && <em title="Responsable"> ★</em>}</strong>
-                  <small className={`st-${st}`}>{STATUS_LABEL[st]}</small>
+                  <small className={`st-${st}`}>Nv {levelOf(a.xp)} · {STATUS_LABEL[st]}</small>
                 </span>
               </button>
             );

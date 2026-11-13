@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { store } from './db.js';
+import { SPECIES } from './companions.js';
 import type { Appearance } from './types.js';
 
 const look = (skin: string, hair: string, hairColor: string, shirt: string, accessory = 'none', eyes = 'normal'): Appearance =>
@@ -17,18 +18,18 @@ export function seed() {
   const product = store.saveTeam({ name: 'Producto', color: '#4f8cff', mission: 'Diseñar y construir el producto: análisis, especificación y desarrollo.', leadId: null });
   const marketing = store.saveTeam({ name: 'Marketing', color: '#ff7a59', mission: 'Dar a conocer el producto: mensajes, contenidos y campañas.', leadId: null });
 
-  const people: [string, string, string, string, Appearance][] = [
-    ['Lucía', 'Responsable de producto', 'Organizada, resolutiva y cercana. Le gusta repartir bien el trabajo.', product.id, look('#e8b48c', 'long', '#5a3320', '#7c5cff')],
-    ['Dani', 'Desarrollador full-stack', 'Pragmático y directo. Prefiere soluciones simples que funcionen.', product.id, look('#c98d62', 'short', '#1f1a17', '#2fa37a', 'headphones')],
-    ['Sara', 'Analista de investigación', 'Curiosa y rigurosa. Siempre contrasta los datos antes de concluir.', product.id, look('#f6d4b8', 'bun', '#b5562b', '#e0668a', 'glasses')],
-    ['Nora', 'Responsable de marketing', 'Creativa, enérgica y con mucho olfato para el público.', marketing.id, look('#8d5a3b', 'curly', '#201512', '#ff9f43')],
-    ['Hugo', 'Redactor y diseñador', 'Detallista, con humor y buen gusto para las palabras.', marketing.id, look('#f1c9a5', 'cap', '#6b4a2f', '#38b6c9', 'beard', 'happy')],
+  const people: [string, string, string, string, Appearance, string][] = [
+    ['Lucía', 'Responsable de producto', 'Organizada, resolutiva y cercana. Le gusta repartir bien el trabajo.', product.id, look('#e8b48c', 'long', '#5a3320', '#7c5cff'), 'lumo'],
+    ['Dani', 'Desarrollador full-stack', 'Pragmático y directo. Prefiere soluciones simples que funcionen.', product.id, look('#c98d62', 'short', '#1f1a17', '#2fa37a', 'headphones'), 'bitxo'],
+    ['Sara', 'Analista de investigación', 'Curiosa y rigurosa. Siempre contrasta los datos antes de concluir.', product.id, look('#f6d4b8', 'bun', '#b5562b', '#e0668a', 'glasses'), 'nubi'],
+    ['Nora', 'Responsable de marketing', 'Creativa, enérgica y con mucho olfato para el público.', marketing.id, look('#8d5a3b', 'curly', '#201512', '#ff9f43'), 'ascuo'],
+    ['Hugo', 'Redactor y diseñador', 'Detallista, con humor y buen gusto para las palabras.', marketing.id, look('#f1c9a5', 'cap', '#6b4a2f', '#38b6c9', 'beard', 'happy'), 'brotin'],
   ];
-  const ids = people.map(([name, role, personality, teamId, appearance], desk) => {
+  const ids = people.map(([name, role, personality, teamId, appearance, species], desk) => {
     const id = randomUUID();
     store.saveAgent({
       id, name, role, personality, instructions: '', providerId: null, model: '', teamId, appearance, desk,
-      createdAt: Date.now() + desk,
+      companion: { species, name: SPECIES[species] }, xp: 0, createdAt: Date.now() + desk,
     });
     return id;
   });

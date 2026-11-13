@@ -2,6 +2,8 @@
 
 Una oficina virtual donde cada empleado es un agente de IA. Tú eres el jefe: te mueves por la oficina, vas a la mesa de un agente a hablar con él, le llamas a tu despacho, le encargas trabajo y él vuelve a traértelo cuando termina. Los agentes se organizan en departamentos, se reúnen, se reparten las tareas y trabajan en segundo plano con el LLM que tú elijas (en la nube, local o un CLI como Claude Code o Codex).
 
+Y tiene alma de RPG de criaturas: cada persona de la oficina (tú incluido) tiene un **compi** original que le sigue a todas partes, gana experiencia con el trabajo entregado, sube de nivel y evoluciona.
+
 Todo corre en Docker con un solo comando.
 
 ## Arranque rápido
@@ -21,7 +23,8 @@ Para parar: `docker compose down` (los datos se conservan en volúmenes; `docker
 
 | Quieres… | Haz esto |
 |---|---|
-| Moverte | Clic en el suelo. Rueda del ratón para el zoom. |
+| Moverte | Teclas **WASD** o flechas, o clic en el suelo. Rueda del ratón para el zoom. |
+| Interactuar con lo que tienes al lado | Tecla **E** (agente u objeto cercano). **Espacio** avanza o cierra el cuadro de diálogo. |
 | Hablar con un agente | Clic sobre él (o en la lista de la izquierda): caminas hasta su mesa y se abre la conversación. |
 | Que venga a tu despacho | Botón **«Que venga a verme»** en su panel. |
 | Encargarle un trabajo | Díselo en el chat («prepárame un plan de…») o usa la pestaña **Tareas**. Irá a su mesa, trabajará en segundo plano y te traerá el resultado. |
@@ -31,6 +34,21 @@ Para parar: `docker compose down` (los datos se conservan en volúmenes; `docker
 | Configurar el LLM | Tu ordenador (despacho) o la consola de la **sala de servidores**. |
 | Ver las ejecuciones en segundo plano | Indicador de la barra superior o pestaña **Segundo plano**. |
 | Ver todas las tareas y resultados | **Tablón de tareas** de la sala de reuniones. |
+| Ver los compis, su nivel y las formas descubiertas | **Álbum de compis**. |
+
+## Compis, niveles y evolución
+
+Al entrar por primera vez eliges a tu compi entre ocho especies originales (Brotín, Ascuo, Gotelo, Voltín, Pedrín, Nubi, Bitxo y Lumo) y le pones mote. Cada agente tiene el suyo, que puedes cambiar al contratarlo o editarlo.
+
+| Acción | Experiencia |
+|---|---|
+| Responder en una conversación | +4 |
+| Entregar una subtarea a su responsable | +35 |
+| Entregar una tarea propia | +45 |
+| Entregar una tarea coordinando a su departamento | +60 |
+| Recibir una entrega (tu propio compi) | +20 |
+
+Cada 100 puntos se sube un nivel. Los compis evolucionan en los niveles 3 y 6, y el álbum va descubriendo las formas que alcanza alguien de la oficina.
 
 ## Proveedores de LLM
 

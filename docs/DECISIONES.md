@@ -98,6 +98,22 @@ Registro de las decisiones tomadas en la primera versión, con su motivo y lo qu
 
 **Decisión:** interfaz, prompts y documentación en español. Los agentes responden en el idioma en que se les habla.
 
+## 12. Capa RPG de criaturas: compis, experiencia y evolución
+
+**Decisión:** cada persona de la oficina tiene una criatura compañera («compi») que le sigue, y el trabajo entregado da experiencia. Cada 100 puntos se sube de nivel y el compi evoluciona en los niveles 3 y 6. Se añade además movimiento con teclado, interacción con una tecla, cuadro de diálogo con texto progresivo para lo que te dicen los agentes, elección de compi inicial y un álbum de colección.
+
+**Motivo:** se pidió un aire de RPG de coleccionar criaturas. Aporta progresión visible (se ve quién ha trabajado más), motivos para volver y personalidad a cada agente, sin tocar el flujo de trabajo.
+
+**Criaturas originales:** las ocho especies, sus nombres, tipos y diseños son propios de este proyecto y se dibujan por código (`web/src/game/creature.ts`). Se toman las mecánicas del género (compañeros, niveles, evoluciones, colección), no personajes, nombres ni arte de ningún juego existente.
+
+**La experiencia la otorga el servidor**, nunca el cliente ni el LLM: se suma en `brain.ts` al completar una conversación, una tarea o una entrega. Así no se puede inflar desde el navegador ni depende de lo que diga un modelo.
+
+**Los compis son solo visuales en el cliente:** siguen a su dueño con una «correa» calculada en el navegador a partir de la posición del dueño. No son actores del servidor, no ocupan celdas y no añaden tráfico de red.
+
+**El tipo es cosmético.** No hay combates ni ventajas por tipo: no encajan con una oficina y añadirían complejidad sin aportar al trabajo real.
+
+**Descartado por ahora:** criaturas salvajes que aparecen y se pueden adoptar, objetos, y que el nivel influya en el comportamiento del agente (por ejemplo, desbloquear herramientas o un modelo mejor).
+
 ## Limitaciones conocidas y siguientes pasos
 
 - **Los agentes solo producen texto.** No tienen herramientas (ficheros, web, código) salvo lo que haga por su cuenta un proveedor CLI. Siguiente paso natural: herramientas por agente y un espacio de trabajo compartido por departamento.
@@ -109,3 +125,4 @@ Registro de las decisiones tomadas en la primera versión, con su motivo y lo qu
 - **Una sola oficina y un solo usuario**, sin login.
 - **Las API keys se guardan sin cifrar** en SQLite (volumen local).
 - **Colisiones:** los personajes se atraviesan entre sí.
+- **El nivel no cambia lo que sabe hacer un agente.** La progresión es visual; enlazarla con capacidades reales (herramientas, memoria, modelo) es un siguiente paso natural.

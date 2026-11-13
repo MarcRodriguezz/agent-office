@@ -8,24 +8,17 @@ import { seed } from './seed.js';
 import { snapshot, startSim } from './sim.js';
 import {
   assignTask, assignTeamTask, chat, dismiss, fire, hire, initOffice, playerGo, playerSay, publishAgents,
-  publishTeams, summon, updateAgent, type GoTarget,
+  playerStep, publishTeams, summon, updateAgent, type GoTarget,
 } from './brain.js';
-import type { Appearance, Provider, ProviderKind } from './types.js';
+import { cleanCompanion, randomCompanion } from './companions.js';
+import { publishSettings, settings } from './settings.js';
+import type { Provider, ProviderKind } from './types.js';
 
 const KINDS: ProviderKind[] = ['mock', 'anthropic', 'openai', 'claude-code', 'codex', 'cli'];
 const text = (v: unknown, max = 4000) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const publicProvider = (p: Provider) => ({ ...p, apiKey: '', hasKey: !!p.apiKey });
 
-function settings() {
-  return {
-    playerName: store.setting('playerName', 'Jefe'),
-    playerAppearance: store.setting<Appearance | null>('playerAppearance', null),
-    defaultProviderId: store.setting<string | null>('defaultProviderId', null),
-  };
-}
-
 const publishProviders = () => hub.broadcast({ type: 'providers', providers: store.providers().map(publicProvider) });
-const publishSettings = () => hub.broadcast({ type: 'settings', settings: settings() });
 
 seed();
 store.failUnfinishedTasks();
@@ -57,6 +50,10 @@ app.get('/ws', { websocket: true }, (socket) => {
       const msg = JSON.parse(raw.toString());
       if (msg.type === 'go') {
         void playerGo(msg.target as GoTarget).then((ok) => hub.send(socket, { type: 'arrived', token: msg.token, ok }));
+      } else if (msg.type === 'step') {
+        const dx = Math.sign(Number(msg.dx) || 0);
+        const dy = dx ? 0 : Math.sign(Number(msg.dy) || 0);
+        if (dx || dy) playerStep(dx, dy);
       } else if (msg.type === 'say') {
         playerSay(text(msg.text, 60));
       }
@@ -72,7 +69,7 @@ app.post('/api/agents', async (req, reply) => {
   const agent = hire({
     name: text(b.name, 40), role: text(b.role, 80) || 'Generalista', personality: text(b.personality),
     instructions: text(b.instructions), providerId: b.providerId || null, model: text(b.model, 120),
-    teamId: b.teamId || null, appearance: b.appearance,
+    teamId: b.teamId || null, appearance: b.appearance, companion: cleanCompanion(b.companion) ?? randomCompanion(),
   });
   if (!agent) return reply.code(409).send({ error: 'La oficina está llena: no quedan mesas libres.' });
   return agent;
@@ -85,6 +82,8 @@ app.patch('/api/agents/:id', async (req, reply) => {
   for (const key of ['name', 'role', 'personality', 'instructions', 'model']) if (typeof b[key] === 'string') patch[key] = text(b[key]);
   for (const key of ['providerId', 'teamId']) if (key in b) patch[key] = b[key] || null;
   if (b.appearance) patch.appearance = b.appearance;
+  const companion = cleanCompanion(b.companion);
+  if (companion) patch.companion = companion;
   const agent = updateAgent(id, patch);
   if (!agent) return reply.code(404).send({ error: 'Agente no encontrado.' });
   if ('teamId' in patch) {
@@ -237,6 +236,8 @@ app.patch('/api/settings', async (req) => {
   const b = req.body as any;
   if (typeof b.playerName === 'string' && text(b.playerName)) store.setSetting('playerName', text(b.playerName, 40));
   if (b.playerAppearance) store.setSetting('playerAppearance', b.playerAppearance);
+  const companion = cleanCompanion(b.playerCompanion);
+  if (companion) store.setSetting('playerCompanion', companion);
   if ('defaultProviderId' in b && store.provider(b.defaultProviderId)) store.setSetting('defaultProviderId', b.defaultProviderId);
   publishSettings();
   return settings();

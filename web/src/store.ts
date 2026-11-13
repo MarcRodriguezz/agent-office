@@ -6,6 +6,7 @@ import type {
 export type Modal =
   | { kind: 'settings'; tab?: 'providers' | 'profile' | 'jobs' }
   | { kind: 'people' }
+  | { kind: 'album' }
   | { kind: 'agent'; id?: string; teamId?: string }
   | { kind: 'tasks'; taskId?: string }
   | null;
@@ -32,12 +33,24 @@ export interface State {
   selectedAgentId: string | null;
   modal: Modal;
   toasts: Toast[];
+  dialog: { agentId: string; text: string } | null;
 }
 
 export interface RenderActor extends ActorSnap {
   rx: number;
   ry: number;
+  px: number;
+  py: number;
+  pmoving: boolean;
+  pfacing: 'left' | 'right';
   seed: number;
+}
+
+export interface Effect {
+  actorId: string;
+  at: number;
+  level: number;
+  evolved: boolean;
 }
 
 let state: State = {
@@ -47,7 +60,7 @@ let state: State = {
   agents: [],
   teams: [],
   providers: [],
-  settings: { playerName: 'Jefe', playerAppearance: null, defaultProviderId: null },
+  settings: { playerName: 'Jefe', playerAppearance: null, playerCompanion: null, playerXp: 0, defaultProviderId: null },
   tasks: [],
   feed: [],
   jobs: { jobs: [], totals: { completed: 0, failed: 0 }, waiting: 0, active: 0 },
@@ -55,6 +68,7 @@ let state: State = {
   selectedAgentId: null,
   modal: null,
   toasts: [],
+  dialog: null,
 };
 
 const listeners = new Set<() => void>();
@@ -77,6 +91,7 @@ export function useStore<T>(selector: (s: State) => T): T {
 
 export const world = {
   actors: new Map<string, RenderActor>(),
+  effects: [] as Effect[],
 };
 
 export function applyActors(snaps: ActorSnap[]) {
@@ -85,7 +100,11 @@ export function applyActors(snaps: ActorSnap[]) {
     seen.add(snap.id);
     const current = world.actors.get(snap.id);
     if (current) Object.assign(current, snap);
-    else world.actors.set(snap.id, { ...snap, rx: snap.x, ry: snap.y, seed: i * 1.7 });
+    else {
+      world.actors.set(snap.id, {
+        ...snap, rx: snap.x, ry: snap.y, px: snap.x + 0.8, py: snap.y, pmoving: false, pfacing: 'left', seed: i * 1.7,
+      });
+    }
   });
   for (const id of world.actors.keys()) if (!seen.has(id)) world.actors.delete(id);
 }

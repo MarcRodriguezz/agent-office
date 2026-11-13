@@ -24,6 +24,8 @@
 | `providers.ts` | Adaptadores de proveedor: Anthropic, compatible OpenAI, Claude Code, Codex, comando propio y simulado. |
 | `db.ts` | Esquema y acceso a SQLite (`node:sqlite`). |
 | `seed.ts` | Datos iniciales (proveedor simulado, dos departamentos, cinco agentes). |
+| `companions.ts` | Especies de compis, niveles (100 de experiencia por nivel) y fases de evolución. |
+| `settings.ts` | Ajustes del jefe: nombre, aspecto, compi, experiencia y proveedor por defecto. |
 | `hub.ts` | Registro de sockets y difusión de mensajes. |
 | `types.ts` | Tipos compartidos por server y worker. |
 
@@ -31,11 +33,11 @@
 
 - **providers**: nombre, tipo (`mock`, `anthropic`, `openai`, `claude-code`, `codex`, `cli`), URL base, API key, modelo, comando.
 - **teams**: nombre, color, misión, responsable (`lead_id`).
-- **agents**: nombre, puesto, personalidad, instrucciones, proveedor y modelo propios (opcionales), departamento, aspecto (JSON), mesa.
+- **agents**: nombre, puesto, personalidad, instrucciones, proveedor y modelo propios (opcionales), departamento, aspecto (JSON), compi (especie y mote), experiencia, mesa.
 - **messages**: conversación jefe ↔ agente.
 - **tasks**: encargo, estado (`queued`, `working`, `delegating`, `done`, `failed`), resultado y `parent_id` para subtareas.
 - **feed**: eventos de la oficina.
-- **settings**: nombre y aspecto del jefe, proveedor por defecto.
+- **settings**: nombre, aspecto, compi y experiencia del jefe, proveedor por defecto.
 
 ### Simulación
 
@@ -76,7 +78,13 @@ Cada llamada al LLM es un trabajo en la cola `llm` de BullMQ. `server` lo encola
 | `POST/PATCH/DELETE /api/providers[/:id]`, `POST /api/providers/:id/test` | Proveedores y prueba de conexión. |
 | `PATCH /api/settings` | Perfil del jefe y proveedor por defecto. |
 | `GET /api/tasks`, `GET /api/jobs` | Tareas y trabajos en segundo plano. |
-| `WS /ws` | Servidor → cliente: `state`, `agents`, `teams`, `providers`, `settings`, `message`, `task`, `feed`, `jobs`, `delivery`, `arrived`. Cliente → servidor: `go`, `say`. |
+| `WS /ws` | Servidor → cliente: `state`, `agents`, `teams`, `providers`, `settings`, `message`, `task`, `feed`, `jobs`, `delivery`, `levelup`, `arrived`. Cliente → servidor: `go`, `step` (teclado), `say`. |
+
+### Experiencia y niveles
+
+`brain.ts` suma experiencia al agente cuando responde, entrega una tarea o coordina a su equipo, y al jefe cuando recibe una entrega. Si cambia el nivel, difunde `levelup` (con `evolved` si además cambia de fase) y lo anota en el feed. El cliente pinta el efecto sobre el personaje.
+
+Los compis no existen en la simulación del servidor: el cliente los hace seguir a su dueño manteniéndolos a una distancia fija («correa») de su posición interpolada.
 
 ## Frontend (`web/src`)
 
@@ -85,8 +93,9 @@ Cada llamada al LLM es un trabajo en la cola `llm` de BullMQ. `server` lo encola
 | `game/OfficeCanvas.tsx` | Bucle de render, cámara, clics y hover. |
 | `game/draw.ts` | Suelos, paredes y muebles (dibujados por código, sin assets). |
 | `game/character.ts` | Personajes y caras procedurales a partir del aspecto; retratos. |
+| `game/creature.ts` | Las ocho especies de compis y su dibujo en tres fases. |
 | `store.ts` | Estado global mínimo (`useSyncExternalStore`) y `world` (actores interpolados, fuera de React). |
 | `net.ts` | REST, WebSocket con reconexión y acciones (`go`, `selectAgent`). |
-| `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. |
+| `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. `ui/Companions.tsx` reúne la elección inicial, el álbum, la barra de experiencia y el cuadro de diálogo. |
 
 El orden de pintado es por profundidad (coordenada Y de la base de cada pared, mueble o personaje), lo que da la sensación de vista 3/4: un agente sentado queda detrás de su mesa y quien está al norte de una pared queda tapado por ella.

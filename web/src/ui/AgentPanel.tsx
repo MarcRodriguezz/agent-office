@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../net';
 import { setState, toast, useStore, world } from '../store';
+import { levelOf, speciesOf, stageOf } from '../game/creature';
 import { Avatar, Markdown, STATUS_LABEL, TASK_STATUS, timeAgo } from './common';
+import { CreatureView, XpBar } from './Companions';
 
 export function AgentPanel() {
   const id = useStore((s) => s.selectedAgentId);
@@ -61,6 +63,13 @@ export function AgentPanel() {
         <button onClick={() => void api('POST', `/agents/${agent.id}/summon`)}>📣 Que venga a verme</button>
         <button onClick={() => void api('POST', `/agents/${agent.id}/dismiss`)}>↩ A su mesa</button>
         <button onClick={() => setState({ modal: { kind: 'agent', id: agent.id } })}>✏️ Editar</button>
+      </div>
+      <div className="compi">
+        <CreatureView species={agent.companion.species} stage={stageOf(levelOf(agent.xp))} size={46} />
+        <div>
+          <strong>{agent.companion.name} <small>{speciesOf(agent.companion.species).type}</small></strong>
+          <XpBar xp={agent.xp} color={speciesOf(agent.companion.species).color} />
+        </div>
       </div>
       <div className="brainline">🧠 {provider ? `${provider.name}${agent.model || provider.model ? ` · ${agent.model || provider.model}` : ''}` : 'Sin proveedor'}</div>
       <nav className="tabs">

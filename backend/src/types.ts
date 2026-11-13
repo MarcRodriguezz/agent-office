@@ -19,6 +19,11 @@ export interface Appearance {
   accessory: string;
 }
 
+export interface Companion {
+  species: string;
+  name: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -29,6 +34,8 @@ export interface Agent {
   model: string;
   teamId: string | null;
   appearance: Appearance;
+  companion: Companion;
+  xp: number;
   desk: number;
   createdAt: number;
 }

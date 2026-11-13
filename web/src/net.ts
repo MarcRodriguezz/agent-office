@@ -1,4 +1,4 @@
-import { applyActors, getState, setState, toast } from './store';
+import { applyActors, getState, setState, toast, world } from './store';
 import type { ChatMessage, GoTarget, Task } from './types';
 
 export async function api<T = any>(method: string, path: string, body?: unknown): Promise<T> {
@@ -56,6 +56,12 @@ function handle(msg: any) {
       break;
     case 'message':
       addMessage(msg.message);
+      if (msg.message.sender === 'agent' && getState().selectedAgentId !== msg.message.agentId) {
+        setState({ dialog: { agentId: msg.message.agentId, text: msg.message.text } });
+      }
+      break;
+    case 'levelup':
+      world.effects.push({ actorId: msg.actorId, at: performance.now(), level: msg.level, evolved: msg.evolved });
       break;
     case 'task':
       upsertTask(msg.task);
@@ -68,7 +74,7 @@ function handle(msg: any) {
       break;
     case 'delivery': {
       const agent = getState().agents.find((a) => a.id === msg.agentId);
-      toast(msg.ok ? `${agent?.name ?? 'Un agente'} te entrega «${msg.title}»` : `${agent?.name ?? 'Un agente'} no pudo completar «${msg.title}»`, msg.ok, msg.agentId);
+      if (!msg.ok) toast(`${agent?.name ?? 'Un agente'} no pudo completar «${msg.title}»`, false, msg.agentId);
       break;
     }
   }
@@ -104,12 +110,16 @@ export function go(target: GoTarget): Promise<boolean> {
   return new Promise((resolve) => waiting.set(token, resolve));
 }
 
+export function step(dx: number, dy: number) {
+  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'step', dx, dy }));
+}
+
 export function sayAsPlayer(text: string) {
   socket?.send(JSON.stringify({ type: 'say', text }));
 }
 
 export async function selectAgent(id: string, walk = true) {
-  setState({ selectedAgentId: id });
+  setState((s) => ({ selectedAgentId: id, dialog: s.dialog?.agentId === id ? null : s.dialog }));
   if (walk) void go({ kind: 'agent', id });
   if (!getState().messages[id]) {
     const list = await api<ChatMessage[]>('GET', `/agents/${id}/messages`).catch(() => []);

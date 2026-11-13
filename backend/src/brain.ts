@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { levelOf, stageOf } from './companions.js';
 import { store } from './db.js';
 import { hub } from './hub.js';
 import { complete } from './llm.js';
@@ -7,6 +8,7 @@ import {
   deskSeat, deskVisitor, furniture, nearestWalkable, walkable, type Cell,
 } from './map.js';
 import { addActor, cellOf, face, removeActor, say, setStatus, walkTo, type Actor } from './sim.js';
+import { publishSettings } from './settings.js';
 import type { Agent, Intent, LlmJob, Provider, Task, Team } from './types.js';
 
 interface Runtime {
@@ -36,6 +38,31 @@ const TASK_TAG = /\[\[\s*TAREA\s*:\s*([\s\S]+?)\]\]/i;
 
 function feed(text: string) {
   hub.broadcast({ type: 'feed', event: store.addFeed(text) });
+}
+
+function celebrate(id: string, who: string, pet: string, before: number, after: number) {
+  const level = levelOf(after);
+  if (level <= levelOf(before)) return;
+  const evolved = stageOf(level) > stageOf(levelOf(before));
+  hub.broadcast({ type: 'levelup', actorId: id, level, evolved });
+  feed(evolved ? `¡${pet}, el compi de ${who}, ha evolucionado!` : `${who} y ${pet} suben al nivel ${level}`);
+}
+
+function award(rt: Runtime, amount: number) {
+  if (runtimes.get(rt.agent.id) !== rt) return;
+  const before = rt.agent.xp;
+  rt.agent.xp += amount;
+  store.saveAgent(rt.agent);
+  celebrate(rt.agent.id, rt.agent.name, rt.agent.companion.name, before, rt.agent.xp);
+  publishAgents();
+}
+
+function awardPlayer(amount: number) {
+  const before = store.setting('playerXp', 0);
+  store.setSetting('playerXp', before + amount);
+  const pet = store.setting<{ name: string } | null>('playerCompanion', null);
+  if (pet) celebrate('player', store.setting('playerName', 'Jefe'), pet.name, before, before + amount);
+  publishSettings();
 }
 
 function interrupt(rt: Runtime) {
@@ -162,6 +189,7 @@ async function reply(rt: Runtime) {
     });
     const tag = raw.match(TASK_TAG);
     post(rt, raw.replace(TASK_TAG, '').trim() || 'Me pongo con ello.');
+    award(rt, 4);
     if (tag && runtimes.get(rt.agent.id) === rt) {
       const task = createTask(rt.agent.id, null, titleOf(tag[1]), tag[1].trim());
       feed(`${rt.agent.name} acepta el encargo «${task.title}»`);
@@ -336,6 +364,7 @@ async function deliver(rt: Runtime, task: Task) {
   hub.broadcast({ type: 'delivery', agentId: agent.id, taskId: task.id, title: task.title, ok });
   say(actor, ok ? `¡Listo! Te traigo «${task.title}»` : `Jefe, he tenido un problema con «${task.title}»`, 6000);
   feed(ok ? `${agent.name} entrega «${task.title}»` : `${agent.name} no ha podido completar «${task.title}»`);
+  if (ok) awardPlayer(20);
   await pause(rt, 7000);
 }
 
@@ -348,6 +377,7 @@ async function runTask(rt: Runtime, task: Task): Promise<Task> {
     const reports = task.parentId ? [] : reportsOf(agent);
     const result = reports.length ? await delegate(rt, task, reports) : await ask(agent, 'task', taskPrompt(task));
     updateTask(task, { status: 'done', result, finishedAt: Date.now() });
+    award(rt, task.parentId ? 35 : reports.length ? 60 : 45);
   } catch (err) {
     updateTask(task, { status: 'failed', result: err instanceof Error ? err.message : String(err), finishedAt: Date.now() });
   }
@@ -471,11 +501,11 @@ export function publishTeams() {
   hub.broadcast({ type: 'teams', teams: store.teams() });
 }
 
-export function hire(data: Omit<Agent, 'id' | 'desk' | 'createdAt'>): Agent | null {
+export function hire(data: Omit<Agent, 'id' | 'desk' | 'createdAt' | 'xp'>): Agent | null {
   const used = new Set(store.agents().map((a) => a.desk));
   const desk = Array.from({ length: DESK_COUNT }, (_, i) => i).find((i) => !used.has(i));
   if (desk === undefined) return null;
-  const agent = store.saveAgent({ ...data, id: randomUUID(), desk, createdAt: Date.now() });
+  const agent = store.saveAgent({ ...data, id: randomUUID(), desk, xp: 0, createdAt: Date.now() });
   spawn(agent, ENTRANCE);
   say(runtimes.get(agent.id)!.actor, '¡Hola a todos! 👋', 4000);
   feed(`${agent.name} se incorpora como ${agent.role}`);
@@ -486,7 +516,7 @@ export function hire(data: Omit<Agent, 'id' | 'desk' | 'createdAt'>): Agent | nu
 export function updateAgent(id: string, patch: Partial<Agent>): Agent | null {
   const rt = runtimes.get(id);
   if (!rt) return null;
-  Object.assign(rt.agent, patch, { id, desk: rt.agent.desk, createdAt: rt.agent.createdAt });
+  Object.assign(rt.agent, patch, { id, desk: rt.agent.desk, createdAt: rt.agent.createdAt, xp: rt.agent.xp });
   store.saveAgent(rt.agent);
   publishAgents();
   return rt.agent;
@@ -526,6 +556,12 @@ export function playerGo(target: GoTarget): Promise<boolean> {
     cell = furniture.find((f) => f.id === target.id)?.spot ?? null;
   }
   return cell ? walkTo(player, cell) : Promise.resolve(false);
+}
+
+export function playerStep(dx: number, dy: number) {
+  const at = cellOf(player);
+  if (walkable(at[0] + dx, at[1] + dy)) void walkTo(player, [at[0] + dx, at[1] + dy]);
+  else if (!player.moving) face(player, dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up');
 }
 
 export function playerSay(text: string) {

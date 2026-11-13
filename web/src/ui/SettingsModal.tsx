@@ -5,6 +5,7 @@ import { setState, toast, useStore } from '../store';
 import type { Provider, ProviderKind } from '../types';
 import { AppearanceEditor } from './AgentEditor';
 import { Modal } from './common';
+import { CompanionPicker } from './Companions';
 
 interface Preset {
   key: string;
@@ -155,8 +156,9 @@ function Profile() {
   const settings = useStore((s) => s.settings);
   const [name, setName] = useState(settings.playerName);
   const [appearance, setAppearance] = useState(settings.playerAppearance ?? DEFAULT_APPEARANCE);
+  const [companion, setCompanion] = useState(settings.playerCompanion);
   const save = async () => {
-    await api('PATCH', '/settings', { playerName: name, playerAppearance: appearance }).catch((e) => toast(e.message, false));
+    await api('PATCH', '/settings', { playerName: name, playerAppearance: appearance, playerCompanion: companion }).catch((e) => toast(e.message, false));
     toast('Perfil guardado');
   };
   return (
@@ -164,6 +166,7 @@ function Profile() {
       <AppearanceEditor value={appearance} onChange={setAppearance} />
       <div className="fields">
         <label>Tu nombre (así te llamarán los agentes)<input value={name} onChange={(e) => setName(e.target.value)} /></label>
+        {companion && <label>Tu compi<CompanionPicker value={companion} onChange={setCompanion} /></label>}
         <footer><span /><button className="primary" onClick={() => void save()}>Guardar perfil</button></footer>
       </div>
     </div>

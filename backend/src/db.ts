@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { randomCompanion } from './companions.js';
 import type { Agent, Appearance, ChatMessage, FeedEvent, Provider, Task, Team } from './types.js';
 
 const file = process.env.DB_PATH ?? './data/office.db';
@@ -15,7 +16,7 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY, name TEXT, role TEXT, personality TEXT, instructions TEXT,
-    provider_id TEXT, model TEXT, team_id TEXT, appearance TEXT, desk INTEGER, created_at INTEGER
+    provider_id TEXT, model TEXT, team_id TEXT, appearance TEXT, desk INTEGER, created_at INTEGER, companion TEXT, xp INTEGER DEFAULT 0
   );
   CREATE TABLE IF NOT EXISTS teams (
     id TEXT PRIMARY KEY, name TEXT, color TEXT, mission TEXT, lead_id TEXT
@@ -35,6 +36,13 @@ db.exec(`
 
 type Row = Record<string, any>;
 
+const agentColumns = (db.prepare('PRAGMA table_info(agents)').all() as Row[]).map((r) => r.name);
+if (!agentColumns.includes('companion')) db.exec('ALTER TABLE agents ADD COLUMN companion TEXT');
+if (!agentColumns.includes('xp')) db.exec('ALTER TABLE agents ADD COLUMN xp INTEGER DEFAULT 0');
+for (const row of db.prepare('SELECT id FROM agents WHERE companion IS NULL').all() as Row[]) {
+  db.prepare('UPDATE agents SET companion = ? WHERE id = ?').run(JSON.stringify(randomCompanion()), row.id);
+}
+
 const toProvider = (r: Row): Provider => ({
   id: r.id, name: r.name, kind: r.kind, baseUrl: r.base_url ?? '', apiKey: r.api_key ?? '',
   model: r.model ?? '', command: r.command ?? '',
@@ -44,6 +52,7 @@ const toAgent = (r: Row): Agent => ({
   id: r.id, name: r.name, role: r.role, personality: r.personality ?? '', instructions: r.instructions ?? '',
   providerId: r.provider_id ?? null, model: r.model ?? '', teamId: r.team_id ?? null,
   appearance: JSON.parse(r.appearance) as Appearance, desk: r.desk, createdAt: r.created_at,
+  companion: JSON.parse(r.companion), xp: r.xp ?? 0,
 });
 
 const toMessage = (r: Row): ChatMessage => ({
@@ -80,13 +89,14 @@ export const store = {
     return db.prepare('SELECT * FROM agents ORDER BY created_at').all().map(toAgent);
   },
   saveAgent(a: Agent): Agent {
-    db.prepare(`INSERT INTO agents (id, name, role, personality, instructions, provider_id, model, team_id, appearance, desk, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    db.prepare(`INSERT INTO agents (id, name, role, personality, instructions, provider_id, model, team_id, appearance, desk, created_at, companion, xp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name = excluded.name, role = excluded.role, personality = excluded.personality,
       instructions = excluded.instructions, provider_id = excluded.provider_id, model = excluded.model,
-      team_id = excluded.team_id, appearance = excluded.appearance, desk = excluded.desk`)
+      team_id = excluded.team_id, appearance = excluded.appearance, desk = excluded.desk,
+      companion = excluded.companion, xp = excluded.xp`)
       .run(a.id, a.name, a.role, a.personality, a.instructions, a.providerId, a.model, a.teamId,
-        JSON.stringify(a.appearance), a.desk, a.createdAt);
+        JSON.stringify(a.appearance), a.desk, a.createdAt, JSON.stringify(a.companion), a.xp);
     return a;
   },
   deleteAgent(id: string) {

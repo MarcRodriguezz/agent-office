@@ -5,7 +5,9 @@ import {
 import { api } from '../net';
 import { setState, toast, useStore } from '../store';
 import type { Appearance } from '../types';
+import { randomCompanion } from '../game/creature';
 import { Avatar, Modal } from './common';
+import { CompanionPicker } from './Companions';
 
 function Body({ appearance }: { appearance: Appearance }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -74,6 +76,7 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
     model: existing?.model ?? '',
     teamId: existing?.teamId ?? teamId ?? '',
     appearance: existing?.appearance ?? randomAppearance(),
+    companion: existing?.companion ?? randomCompanion(),
   }));
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
@@ -107,6 +110,7 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
             <label>Nombre<input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="Marta" autoFocus /></label>
             <label>Puesto<input value={form.role} onChange={(e) => set({ role: e.target.value })} placeholder="Diseñadora de producto" /></label>
           </div>
+          <label>Compi<CompanionPicker value={form.companion} onChange={(companion) => set({ companion })} /></label>
           <label>Personalidad
             <input value={form.personality} onChange={(e) => set({ personality: e.target.value })} placeholder="Metódica, optimista, con sentido del humor…" />
           </label>

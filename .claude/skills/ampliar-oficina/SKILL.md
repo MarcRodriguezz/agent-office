@@ -1,6 +1,6 @@
 ---
 name: ampliar-oficina
-description: Modifica el mapa de Agent Office: añadir salas, muebles, mesas para más agentes u objetos interactivos. Úsala cuando se pida cambiar la distribución o el aspecto de la oficina.
+description: Modifica el mapa de Agent Office (salas, muebles, mesas para más agentes, objetos interactivos) o añade especies de compis. Úsala cuando se pida cambiar la distribución, el aspecto de la oficina o las criaturas.
 ---
 
 # Ampliar o cambiar la oficina
@@ -38,6 +38,12 @@ Las mesas salen de `DESK_COUNT` y `deskOrigin(i)` en `map.ts`. Cada mesa ocupa 3
 - Paredes: `wallH(y, x1, x2)` y `wallV(x, y1, y2)`; las puertas se abren con `door(x, y)`.
 - Salas: añade una entrada a `rooms` (rectángulo interior, nombre y tipo de suelo: `wood`, `carpet`, `tech`, `tile`, `office`, `cafe`). Un suelo nuevo se define en `FLOORS` (`draw.ts`).
 - Si cambias `W` o `H`, revisa que todo siga siendo alcanzable.
+
+## Añadir una especie de compi
+
+1. Añade el id y el nombre a `SPECIES` en `backend/src/companions.ts`.
+2. Añade la especie (id, nombre, tipo, colores y descripción) a `SPECIES` en `web/src/game/creature.ts` y su `case` en `drawCreature`, con sus tres fases (`stage` 1 a 3). Debe ser un diseño propio.
+3. Comprueba que se ve en el selector del editor de agentes y en el álbum, incluida la silueta de las fases sin descubrir.
 
 ## Verificar
 

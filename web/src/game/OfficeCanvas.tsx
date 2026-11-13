@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { getState, setState, world, type RenderActor } from '../store';
-import { go, sayAsPlayer, selectAgent } from '../net';
+import { go, sayAsPlayer, selectAgent, step } from '../net';
 import type { Furniture, MapData } from '../types';
 import { DEFAULT_APPEARANCE, drawCharacter, roundRect } from './character';
+import { drawCreature, levelOf, stageOf } from './creature';
 import { INTERACT_ICON, T, WALL_H, buildFloor, drawFurniture, drawWall, drawWindow, wallCells, wrapText } from './draw';
 
 const PANEL_W = 420;
@@ -104,6 +105,60 @@ export function OfficeCanvas() {
       view.userZoom = Math.max(0.6, Math.min(1.8, view.userZoom * (e.deltaY > 0 ? 0.9 : 1.1)));
     };
 
+    const keys = new Set<string>();
+    const DIRS: Record<string, [number, number]> = {
+      arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1], arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0],
+    };
+    const typing = () => {
+      const el = document.activeElement;
+      return !!el && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+    };
+    const interactNearby = () => {
+      const player = world.actors.get('player');
+      if (!player || !map) return;
+      let best: string | null = null;
+      let bestDist = 1.9;
+      for (const a of world.actors.values()) {
+        const d = Math.hypot(a.rx - player.rx, a.ry - player.ry);
+        if (a.kind === 'agent' && d < bestDist) {
+          best = a.id;
+          bestDist = d;
+        }
+      }
+      if (best) {
+        void selectAgent(best, false);
+        return;
+      }
+      const f = map.furniture.find((x) => x.interact && x.spot && Math.hypot(x.spot[0] - player.rx, x.spot[1] - player.ry) < 1.6);
+      if (f) runInteraction(f);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (typing() || getState().modal || e.ctrlKey || e.metaKey || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (DIRS[key]) {
+        e.preventDefault();
+        if (!keys.has(key)) step(...DIRS[key]);
+        keys.add(key);
+      } else if (key === 'e' && !e.repeat) {
+        interactNearby();
+      } else if (key === 'escape') {
+        setState({ selectedAgentId: null });
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => keys.delete(e.key.toLowerCase());
+    const onBlur = () => keys.clear();
+    const stepper = setInterval(() => {
+      if (typing() || getState().modal) {
+        keys.clear();
+        return;
+      }
+      const last = [...keys].pop();
+      if (last) step(...DIRS[last]);
+    }, 125);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('click', onClick);
     canvas.addEventListener('wheel', onWheel, { passive: false });
@@ -188,6 +243,24 @@ export function OfficeCanvas() {
       }
 
       const left = cw > 900 ? ROSTER_W : 0;
+      for (const a of world.actors.values()) {
+        const dx = a.rx - a.px;
+        const dy = a.ry - a.py;
+        const dist = Math.hypot(dx, dy);
+        const leash = 0.85;
+        if (dist > 5) {
+          a.px = a.rx + 0.8;
+          a.py = a.ry;
+        } else if (dist > leash) {
+          a.px += (dx / dist) * (dist - leash);
+          a.py += (dy / dist) * (dist - leash);
+          a.pmoving = dist - leash > 0.004;
+          if (Math.abs(dx) > 0.08) a.pfacing = dx > 0 ? 'right' : 'left';
+        } else {
+          a.pmoving = false;
+        }
+      }
+
       const usable = cw - left - (state.selectedAgentId && cw > 900 ? PANEL_W : 0);
       view.zoom = Math.max(0.8, Math.min(1.25, usable / (30 * T))) * view.userZoom;
       view.cx += (left + usable / 2 - view.cx) * (firstFrame ? 1 : k * 0.5);
@@ -271,6 +344,20 @@ export function OfficeCanvas() {
           }),
         });
       }
+      for (const a of world.actors.values()) {
+        const owner = agents.get(a.id);
+        const companion = a.kind === 'player' ? state.settings.playerCompanion : owner?.companion;
+        if (!companion) continue;
+        const stage = stageOf(levelOf(a.kind === 'player' ? state.settings.playerXp : owner?.xp ?? 0));
+        const px = (a.px + 0.5) * T;
+        const py = (a.py + 0.5) * T + 16;
+        drawables.push({
+          y: py,
+          draw: () => drawCreature(ctx, px, py, companion.species, stage, {
+            time, seed: a.seed + 2, moving: a.pmoving, facing: a.pmoving ? a.pfacing : 'down',
+          }),
+        });
+      }
       drawables.sort((p, q) => p.y - q.y);
       for (const d of drawables) d.draw();
 
@@ -295,18 +382,66 @@ export function OfficeCanvas() {
 
       const sorted = [...world.actors.values()].sort((p, q) => p.ry - q.ry);
       for (const a of sorted) {
-        if (a.kind === 'player') drawTag(a, `${state.settings.playerName} (tú)`, '#ffd76a', false);
+        if (a.kind === 'player') drawTag(a, `${state.settings.playerName} (tú) · Nv ${levelOf(state.settings.playerXp)}`, '#ffd76a', false);
         else {
           const agent = agents.get(a.id);
-          if (agent) drawTag(a, agent.name, agent.teamId ? teams.get(agent.teamId)?.color ?? null : null, a.id === state.selectedAgentId);
+          if (agent) drawTag(a, `${agent.name} · Nv ${levelOf(agent.xp)}`, agent.teamId ? teams.get(agent.teamId)?.color ?? null : null, a.id === state.selectedAgentId);
         }
       }
       for (const a of sorted) if (a.bubble) drawBubble(a);
+
+      world.effects = world.effects.filter((fx) => now - fx.at < 3200);
+      for (const fx of world.effects) {
+        const a = world.actors.get(fx.actorId);
+        if (!a) continue;
+        const age = (now - fx.at) / 3200;
+        const [fx0, fy0] = feet(a);
+        const px = (a.px + 0.5) * T;
+        const py = (a.py + 0.5) * T + 4;
+        ctx.globalAlpha = Math.min(1, (1 - age) * 2.5);
+        if (fx.evolved) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          for (let i = 0; i < 2; i++) {
+            ctx.beginPath();
+            ctx.arc(px, py, 10 + ((age * 2 + i * 0.5) % 1) * 34, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+        ctx.fillStyle = '#ffd76a';
+        for (let i = 0; i < 10; i++) {
+          const ang = (i / 10) * Math.PI * 2 + age * 2;
+          const rad = 14 + age * 46;
+          const sx = (fx.evolved ? px : fx0) + Math.cos(ang) * rad;
+          const sy = (fx.evolved ? py : fy0 - 30) + Math.sin(ang) * rad * 0.7 - age * 20;
+          ctx.beginPath();
+          for (let k = 0; k < 8; k++) {
+            const r2 = k % 2 ? 2 : 5;
+            ctx.lineTo(sx + Math.cos((k * Math.PI) / 4 + age * 6) * r2, sy + Math.sin((k * Math.PI) / 4 + age * 6) * r2);
+          }
+          ctx.fill();
+        }
+        const label = fx.evolved ? '¡EVOLUCIÓN!' : `¡NIVEL ${fx.level}!`;
+        ctx.font = `800 15px ${FONT}`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#1d2030';
+        const ly = fy0 - 100 - Math.min(1, age * 3) * 14;
+        ctx.strokeText(label, fx0, ly);
+        ctx.fillStyle = '#ffd76a';
+        ctx.fillText(label, fx0, ly);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+      }
     };
 
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
+      clearInterval(stepper);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
       canvas.removeEventListener('mousemove', onMove);
       canvas.removeEventListener('click', onClick);
       canvas.removeEventListener('wheel', onWheel);
