@@ -1,0 +1,6 @@
+export const QUEUE_NAME = 'llm';
+
+export const connection = {
+  host: process.env.REDIS_HOST ?? 'redis',
+  port: Number(process.env.REDIS_PORT ?? 6379),
+};
