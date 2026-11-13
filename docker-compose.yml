@@ -1,0 +1,56 @@
+name: agent-office
+
+x-backend: &backend
+  build:
+    context: ./backend
+    args:
+      INSTALL_AGENT_CLIS: ${INSTALL_AGENT_CLIS:-true}
+  image: agent-office-backend
+  restart: unless-stopped
+  environment:
+    REDIS_HOST: redis
+    DB_PATH: /app/data/office.db
+    WORKSPACE_DIR: /workspace
+    WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  server:
+    <<: *backend
+    command: ["node", "dist/server.js"]
+    volumes:
+      - office-data:/app/data
+
+  worker:
+    <<: *backend
+    command: ["node", "dist/worker.js"]
+    volumes:
+      - workspace:/workspace
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "127.0.0.1:${OFFICE_PORT:-8080}:80"
+
+volumes:
+  office-data:
+  workspace:
