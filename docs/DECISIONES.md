@@ -1,6 +1,6 @@
 # Decisiones de diseño
 
-Registro de las decisiones tomadas en la primera versión, con su motivo y lo que se descartó. Fecha: 2026-11-13.
+Registro de las decisiones tomadas, con su motivo y lo que se descartó. Decisiones 1 a 12: 2026-11-13. Decisiones 13 a 15: 2026-11-16.
 
 ## 1. Qué es el producto
 
@@ -114,6 +114,45 @@ Registro de las decisiones tomadas en la primera versión, con su motivo y lo qu
 
 **Descartado por ahora:** criaturas salvajes que aparecen y se pueden adoptar, objetos, y que el nivel influya en el comportamiento del agente (por ejemplo, desbloquear herramientas o un modelo mejor).
 
+## 13. Servidores remotos que se conectan a la oficina
+
+**Decisión:** un servidor remoto es el mismo worker con dos variables (`OFFICE_URL`, `NODE_TOKEN`). Abre él la conexión (WebSocket) hacia la oficina y por ella recibe los trabajos de los agentes que tiene asignados. Cada agente elige dónde se ejecuta.
+
+**Motivo:** permite repartir agentes entre máquinas (una con GPU, otra con una suscripción distinta) sin exponer Redis ni abrir puertos en el servidor remoto: basta con que alcance la oficina. Se reutiliza la imagen y los adaptadores de proveedor.
+
+**Detalles:**
+- Los trabajos locales siguen pasando por BullMQ; los remotos van por el WebSocket del servidor, que aplica su propia concurrencia.
+- Si el servidor de un agente está desconectado, su trabajo falla con un mensaje claro. No se desvía a otra máquina, porque el proveedor configurado (un modelo local, una sesión concreta) puede no existir allí.
+- Al quitar un servidor, sus agentes vuelven a ejecutarse en la oficina.
+
+**Descartado:** exponer Redis a los workers remotos (habría que protegerlo y abrirlo a la red) y controlar los servidores por SSH desde la oficina (exige guardar credenciales de máquinas ajenas).
+
+## 14. Inicio de sesión real en Claude Code y Codex desde la interfaz
+
+**Decisión:** la oficina lanza el inicio de sesión oficial de cada CLI (`claude auth login`, `codex login --device-auth`) dentro del servidor elegido, muestra la salida y reenvía el código que pega el usuario. La sesión queda guardada en un volumen.
+
+**Motivo:** usar una suscripción no debería obligar a entrar al contenedor ni a copiar tokens. Se usa el flujo oficial de cada herramienta en lugar de reimplementar su OAuth, así sigue funcionando cuando cambien.
+
+**Detalles:**
+- Solo se pueden lanzar cuatro acciones fijas (iniciar y cerrar sesión de cada CLI): la interfaz no ofrece un terminal libre.
+- El pseudoterminal se consigue con `script`, que ya viene en la imagen, para no compilar módulos nativos.
+- La imagen instala ahora `ca-certificates`: sin ellos Codex no podía conectar por HTTPS.
+
+## 15. Oficinas independientes que se conectan entre sí
+
+**Decisión:** cada oficina es una instalación completa y autónoma. Dos oficinas se enlazan con un código de invitación y un WebSocket persistente; comparten su directorio de personas y departamentos y se envían encargos. No hay servidor central.
+
+**Motivo:** cada oficina conserva sus datos, sus claves y su gasto, puede estar en otra máquina o pertenecer a otra persona, y sigue funcionando sola si el enlace se cae.
+
+**Detalles:**
+- Solo la oficina que se une necesita alcanzar a la otra; el canal es bidireccional.
+- Un encargo remoto es una tarea local normal con un origen: reutiliza el flujo existente (incluido el reparto en equipo) y las reglas contra bucles.
+- La entrega se representa con un visitante que entra a la oficina que hizo el encargo.
+- Los resultados que no se pueden entregar por una caída se guardan en memoria y se reconcilian al reconectar.
+- El enlace entra por un puerto aparte que solo publica `/link/` y exige token, para poder abrirlo a otras máquinas sin exponer la interfaz ni la API.
+
+**Descartado:** varias oficinas dentro de un mismo servidor y base de datos (acopla datos y claves de equipos distintos) y un directorio central de oficinas.
+
 ## Limitaciones conocidas y siguientes pasos
 
 - **Los agentes solo producen texto.** No tienen herramientas (ficheros, web, código) salvo lo que haga por su cuenta un proveedor CLI. Siguiente paso natural: herramientas por agente y un espacio de trabajo compartido por departamento.
@@ -122,7 +161,9 @@ Registro de las decisiones tomadas en la primera versión, con su motivo y lo qu
 - **Máximo 8 agentes** (8 mesas en el mapa).
 - **Reinicios:** las tareas que estén en curso al reiniciar el servidor se marcan como fallidas; no se reanudan.
 - **Sin presupuesto de tokens** por agente ni contador de coste.
-- **Una sola oficina y un solo usuario**, sin login.
+- **Un solo usuario por oficina**, sin login en la interfaz.
+- **El enlace no va cifrado por sí mismo.** Entre máquinas hay que ponerlo detrás de HTTPS o una VPN. Una oficina conectada puede encargar trabajo sin límite.
+- **Las oficinas no comparten conversación ni tareas en vivo**: solo directorio, encargos y resultados. No se puede pasear por la otra oficina.
 - **Las API keys se guardan sin cifrar** en SQLite (volumen local).
 - **Colisiones:** los personajes se atraviesan entre sí.
 - **El nivel no cambia lo que sabe hacer un agente.** La progresión es visual; enlazarla con capacidades reales (herramientas, memoria, modelo) es un siguiente paso natural.

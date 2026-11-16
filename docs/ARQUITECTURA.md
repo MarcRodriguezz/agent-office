@@ -4,12 +4,14 @@
 
 | Servicio | Imagen | Responsabilidad |
 |---|---|---|
-| `web` | nginx + build de Vite | Sirve el frontend y hace de proxy de `/api` y `/ws` hacia `server`. Único puerto publicado (`127.0.0.1:8080`). |
+| `web` | nginx + build de Vite | Sirve el frontend y hace de proxy de `/api` y `/ws` hacia `server` (`127.0.0.1:8080`). Un segundo puerto, el de enlace (`8090`), solo deja pasar `/link/`. |
 | `server` | `agent-office-backend` (`node dist/server.js`) | API REST, WebSocket, simulación, orquestación de agentes y persistencia en SQLite. |
 | `worker` | `agent-office-backend` (`node dist/worker.js`) | Consume la cola `llm` y ejecuta las llamadas a los proveedores. |
 | `redis` | `redis:7-alpine` | Backend de la cola BullMQ. |
 
-`server` y `worker` comparten imagen y código (`backend/`), con distinto comando. Volúmenes: `office-data` (SQLite) y `workspace` (directorio de trabajo de los CLIs).
+`server` y `worker` comparten imagen y código (`backend/`), con distinto comando. Volúmenes: `office-data` (SQLite), `workspace` (directorio de trabajo de los CLIs) y `agent-home` (sesiones de Claude Code y Codex).
+
+`docker-compose.node.yml` levanta un **servidor remoto**: la misma imagen con `worker.js` y las variables `OFFICE_URL` y `NODE_TOKEN`. No usa Redis ni base de datos.
 
 ## Backend (`backend/src`)
 
@@ -20,7 +22,10 @@
 | `sim.ts` | Actores (jugador y agentes), bucle de simulación (80 ms), movimiento, bocadillos y difusión del estado. |
 | `map.ts` | Mapa de la oficina (paredes, salas, muebles, mesas, puntos de interés) y búsqueda de caminos (BFS). |
 | `llm.ts` | Cliente de la cola: encola un trabajo, espera el resultado y publica el estado de los trabajos. |
-| `worker.ts` | Proceso worker de BullMQ. |
+| `worker.ts` | Proceso worker. En la oficina consume la cola de BullMQ; con `NODE_TOKEN` actúa como servidor remoto. |
+| `node-client.ts` | Lado del worker: conexión con la oficina, ejecución de trabajos remotos, estado de las sesiones de los CLIs y terminal de inicio de sesión. |
+| `nodes.ts` | Lado de la oficina: registro de servidores conectados, envío de trabajos y relevo del terminal de inicio de sesión. |
+| `offices.ts` | Enlace entre oficinas: invitaciones, conexión, directorio compartido y encargos remotos. |
 | `providers.ts` | Adaptadores de proveedor: Anthropic, compatible OpenAI, Claude Code, Codex, comando propio y simulado. |
 | `db.ts` | Esquema y acceso a SQLite (`node:sqlite`). |
 | `seed.ts` | Datos iniciales (proveedor simulado, dos departamentos, cinco agentes). |
@@ -37,7 +42,12 @@
 - **messages**: conversación jefe ↔ agente.
 - **tasks**: encargo, estado (`queued`, `working`, `delegating`, `done`, `failed`), resultado y `parent_id` para subtareas.
 - **feed**: eventos de la oficina.
-- **settings**: nombre, aspecto, compi y experiencia del jefe, proveedor por defecto.
+- **settings**: nombre, aspecto, compi y experiencia del jefe, proveedor por defecto, nombre e identificador de la oficina y dirección de enlace.
+- **nodes**: servidores remotos (nombre y token).
+- **peers**: oficinas conectadas (nombre, dirección, token y sentido de la conexión).
+- **remote_tasks**: encargos enviados a otras oficinas y su resultado.
+
+Los agentes guardan además `node_id` (dónde se ejecutan) y las tareas `origin` (oficina que las encargó, si vienen de fuera).
 
 ### Simulación
 
@@ -65,6 +75,22 @@ encargo (chat con [[TAREA: …]], formulario o encargo a departamento)
 
 Cada llamada al LLM es un trabajo en la cola `llm` de BullMQ. `server` lo encola y espera (`waitUntilFinished`); `worker` lo ejecuta con el proveedor que corresponda.
 
+### Servidores remotos
+
+Cada worker abre un WebSocket hacia la oficina: el local a `/internal/node` (no publicado) y los remotos a `/link/node?token=…`. Por ese canal informa de su estado (CLIs instalados y sesión iniciada) y recibe órdenes.
+
+`complete()` en `llm.ts` decide la ruta de cada trabajo: si el agente tiene un servidor remoto asignado, se le envía por su WebSocket y se espera el resultado; si no, va a la cola de BullMQ como siempre. Si el servidor está desconectado, el trabajo falla con un mensaje claro en lugar de ejecutarse en otro sitio.
+
+### Inicio de sesión en los CLIs
+
+La interfaz pide una acción de una lista cerrada (`claude-login`, `claude-logout`, `codex-login`, `codex-logout`). La oficina la reenvía al servidor elegido, que lanza el comando dentro de un pseudoterminal (`script`) y transmite la salida; lo que escribe el usuario (el código de autorización) viaja de vuelta. Al terminar, el servidor vuelve a comprobar el estado de las sesiones.
+
+### Enlace entre oficinas
+
+La oficina que se une abre un WebSocket a `/link/office?token=…` de la que invitó; el canal es simétrico y se reintenta solo. Mensajes: `hello` (identidad), `directory` (personas y departamentos), `task` (encargo), `task-update` (aceptado, terminado o fallido), `task-status` (reconciliación tras una caída) y `bye`.
+
+Un encargo recibido se convierte en una tarea local con `origin`; el agente la hace igual que cualquier otra (reparto en equipo incluido) y, en lugar de llevársela al jefe local, la «envía» desde la entrada. En la oficina que lo pidió, la llegada del resultado crea un actor visitante con el aspecto de quien hizo el trabajo, que entra, lo entrega y se va.
+
 ### API
 
 | Método y ruta | Uso |
@@ -76,9 +102,12 @@ Cada llamada al LLM es un trabajo en la cola `llm` de BullMQ. `server` lo encola
 | `POST /api/agents/:id/summon`, `/dismiss` | Llamar al despacho / mandar a su mesa. |
 | `POST/PATCH/DELETE /api/teams[/:id]`, `POST /api/teams/:id/tasks` | Departamentos y encargos de equipo. |
 | `POST/PATCH/DELETE /api/providers[/:id]`, `POST /api/providers/:id/test` | Proveedores y prueba de conexión. |
-| `PATCH /api/settings` | Perfil del jefe y proveedor por defecto. |
+| `PATCH /api/settings` | Perfil del jefe, proveedor por defecto, nombre de la oficina y dirección de enlace. |
+| `POST/DELETE /api/nodes[/:id]`, `GET /api/nodes/:id/setup`, `POST /api/nodes/:id/refresh` | Servidores remotos. |
+| `POST /api/offices/invite`, `/join`, `DELETE /api/offices/:id`, `POST /api/offices/:id/tasks` | Conexión entre oficinas y encargos remotos. |
+| `WS /link/node`, `WS /link/office`, `GET /link/health` | Puerto de enlace: servidores remotos y otras oficinas (con token). |
 | `GET /api/tasks`, `GET /api/jobs` | Tareas y trabajos en segundo plano. |
-| `WS /ws` | Servidor → cliente: `state`, `agents`, `teams`, `providers`, `settings`, `message`, `task`, `feed`, `jobs`, `delivery`, `levelup`, `arrived`. Cliente → servidor: `go`, `step` (teclado), `say`. |
+| `WS /ws` | Servidor → cliente: `state`, `agents`, `teams`, `providers`, `settings`, `message`, `task`, `feed`, `jobs`, `delivery`, `levelup`, `arrived`, `nodes`, `offices`, `visitors`, `dialog`, `term`, `term-exit`. Cliente → servidor: `go`, `step` (teclado), `say`, `term-start`, `term-input`, `term-kill`. |
 
 ### Experiencia y niveles
 
@@ -96,6 +125,6 @@ Los compis no existen en la simulación del servidor: el cliente los hace seguir
 | `game/creature.ts` | Las ocho especies de compis y su dibujo en tres fases. |
 | `store.ts` | Estado global mínimo (`useSyncExternalStore`) y `world` (actores interpolados, fuera de React). |
 | `net.ts` | REST, WebSocket con reconexión y acciones (`go`, `selectAgent`). |
-| `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. `ui/Companions.tsx` reúne la elección inicial, el álbum, la barra de experiencia y el cuadro de diálogo. |
+| `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. `ui/Companions.tsx` reúne la elección inicial, el álbum, la barra de experiencia y el cuadro de diálogo. `ui/Servers.tsx` muestra los servidores y el inicio de sesión; `ui/OfficesModal.tsx`, las oficinas conectadas. |
 
 El orden de pintado es por profundidad (coordenada Y de la base de cada pared, mueble o personaje), lo que da la sensación de vista 3/4: un agente sentado queda detrás de su mesa y quien está al norte de una pared queda tapado por ella.

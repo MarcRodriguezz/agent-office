@@ -38,11 +38,21 @@ Se ejecutan como subproceso dentro del contenedor `worker`, con el prompt por la
 
 | Proveedor | Comando | Credenciales |
 |---|---|---|
-| Claude Code | `claude -p --output-format text [--model …]` | Token de `claude setup-token` (empieza por `sk-ant-oat`) o API key de Anthropic, en el campo de la interfaz o en `.env` (`CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`). |
-| Codex | `codex exec --skip-git-repo-check --sandbox read-only -o <fichero> [-m …] -` | API key de OpenAI en el campo o en `.env` (`OPENAI_API_KEY`). |
+| Claude Code | `claude -p --output-format text [--model …]` | Sesión iniciada desde **Servidores y sesiones** (recomendado). Alternativas: token de `claude setup-token` o API key de Anthropic, en el campo de la interfaz o en `.env`. |
+| Codex | `codex exec --skip-git-repo-check --sandbox read-only -o <fichero> [-m …] -` | Sesión iniciada desde **Servidores y sesiones** con el código de dispositivo (recomendado). Alternativa: API key de OpenAI en el campo o en `.env`. |
 | Comando propio | `sh -c "<tu comando>"` | Las que necesite tu comando; debe estar instalado en la imagen. |
 
 Son más lentos que una API (arrancan un agente completo por llamada) pero permiten usar una suscripción en lugar de pago por token. Con `INSTALL_AGENT_CLIS=false` no se instalan.
+
+### Iniciar sesión
+
+En **LLM y ajustes → Servidores y sesiones** (o en la ficha del propio proveedor) cada servidor muestra el estado de sus sesiones y un botón para iniciarla o cerrarla. La sesión vive en el volumen `agent-home` de ese servidor: cada servidor remoto tiene la suya.
+
+Si en Codex el inicio con código de dispositivo aparece deshabilitado, actívalo en los ajustes de seguridad de tu cuenta de ChatGPT.
+
+### Dónde se ejecuta cada agente
+
+Un agente usa el proveedor configurado, pero la llamada sale desde el servidor que tenga asignado. Para un modelo local en una máquina remota, crea un proveedor que apunte a `http://host.docker.internal:11434/v1` (visto desde ese servidor) y asigna los agentes a ese servidor. «Guardar y probar» permite elegir desde qué servidor se prueba.
 
 ## Cerebro simulado
 

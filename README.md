@@ -4,6 +4,8 @@ Una oficina virtual donde cada empleado es un agente de IA. Tú eres el jefe: te
 
 Y tiene alma de RPG de criaturas: cada persona de la oficina (tú incluido) tiene un **compi** original que le sigue a todas partes, gana experiencia con el trabajo entregado, sube de nivel y evoluciona.
 
+Los agentes pueden ejecutarse en esta máquina o en **servidores remotos** tuyos, y varias oficinas pueden **conectarse entre sí** para encargarse trabajo.
+
 Todo corre en Docker con un solo comando.
 
 ## Arranque rápido
@@ -32,6 +34,9 @@ Para parar: `docker compose down` (los datos se conservan en volúmenes; `docker
 | Contratar / editar / despedir | Mostrador de **RRHH** o botón **Contratar agente**. Nombre, puesto, personalidad, cara, ropa, departamento y cerebro. |
 | Crear departamentos | **Equipo y departamentos**: nombre, color, misión, responsable (★) y miembros. |
 | Configurar el LLM | Tu ordenador (despacho) o la consola de la **sala de servidores**. |
+| Iniciar sesión en Claude Code o Codex | **LLM y ajustes → Servidores y sesiones → Iniciar sesión**. |
+| Poner agentes en otro servidor | **Servidores y sesiones → Añadir un servidor remoto**, y elige «Dónde se ejecuta» al editar el agente. |
+| Conectar con otra oficina | **Oficinas** (o el globo de RRHH): una invita, la otra se une con el código. |
 | Ver las ejecuciones en segundo plano | Indicador de la barra superior o pestaña **Segundo plano**. |
 | Ver todas las tareas y resultados | **Tablón de tareas** de la sala de reuniones. |
 | Ver los compis, su nivel y las formas descubiertas | **Álbum de compis**. |
@@ -50,6 +55,42 @@ Al entrar por primera vez eliges a tu compi entre ocho especies originales (Brot
 
 Cada 100 puntos se sube un nivel. Los compis evolucionan en los niveles 3 y 6, y el álbum va descubriendo las formas que alcanza alguien de la oficina.
 
+## Iniciar sesión con tu cuenta (Claude Code y Codex)
+
+No hace falta copiar tokens a mano. En **LLM y ajustes → Servidores y sesiones** cada servidor muestra si Claude Code y Codex tienen sesión:
+
+- **Claude Code**: pulsa *Iniciar sesión*, abre el enlace, autoriza y pega en la oficina el código que te da la página.
+- **Codex**: pulsa *Iniciar sesión*, abre el enlace e introduce el código de un solo uso que aparece; la oficina detecta sola cuándo terminas.
+
+La sesión se guarda en un volumen (`agent-home`), así que sobrevive a reinicios y reconstrucciones. Después conecta el proveedor «Claude Code» o «Codex CLI» en *Proveedores LLM* y márcalo por defecto.
+
+## Servidores remotos
+
+Un servidor remoto ejecuta el trabajo de los agentes que le asignes (por ejemplo, una máquina con GPU y Ollama, o un VPS con su propia sesión de Claude Code).
+
+1. En **Servidores y sesiones** añade el servidor: la oficina te da el comando con su token.
+2. En la máquina remota, con este repositorio clonado:
+   ```bash
+   OFFICE_URL=http://direccion-de-la-oficina:8090 NODE_TOKEN=<token> docker compose -f docker-compose.node.yml up -d --build
+   ```
+3. Al editar un agente, elige el servidor en **Dónde se ejecuta**.
+
+Es el servidor remoto quien se conecta a la oficina, así que no necesita puertos abiertos. La oficina sí debe ser alcanzable por su **puerto de enlace** (ver más abajo). Desde la oficina puedes iniciar sesión en Claude Code y Codex de cada servidor.
+
+## Varias oficinas conectadas
+
+Cada oficina es una instalación independiente (en otra máquina o en la misma con otro nombre de proyecto y otros puertos):
+
+```bash
+OFFICE_PORT=8081 LINK_PORT=8091 docker compose -p agent-office-2 up -d
+```
+
+Para conectarlas, una genera un **código de invitación** en *Oficinas* y la otra lo pega. A partir de ahí cada una ve a la gente y los departamentos de la otra, puede encargarles trabajo y, cuando terminan, alguien de esa oficina entra por la puerta a entregártelo en persona.
+
+### Puerto de enlace
+
+Los servidores remotos y las otras oficinas entran por un puerto aparte (`LINK_PORT`, 8090) que solo expone las rutas `/link/`, protegidas por token. Por defecto solo escucha en `127.0.0.1`; para aceptar conexiones de otras máquinas pon `LINK_BIND=0.0.0.0` en `.env`. La interfaz y la API siguen siendo solo locales.
+
 ## Proveedores de LLM
 
 Cada agente usa el proveedor por defecto de la oficina o uno propio (y, opcionalmente, un modelo propio).
@@ -58,7 +99,7 @@ Cada agente usa el proveedor por defecto de la oficina o uno propio (y, opcional
 |---|---|---|
 | API en la nube | Anthropic (Claude), OpenAI, Google Gemini, OpenRouter, Groq, Mistral, DeepSeek | Anthropic usa el SDK oficial; el resto, el protocolo compatible con OpenAI. |
 | Local | Ollama, LM Studio, cualquier servidor compatible con OpenAI (vLLM, llama.cpp, LiteLLM…) | Se accede a tu máquina con `host.docker.internal`. Sin API key. |
-| Agentes CLI | Claude Code (`claude -p`), Codex (`codex exec`), comando propio | Vienen instalados en el contenedor `worker`. |
+| Agentes CLI | Claude Code (`claude -p`), Codex (`codex exec`), comando propio | Vienen instalados. Se inicia sesión desde la propia oficina. |
 | Sin LLM | Cerebro simulado | Para probar la oficina sin gastar tokens. |
 
 Detalles de cada uno en [docs/PROVEEDORES.md](docs/PROVEEDORES.md).
@@ -88,12 +129,18 @@ Más detalle en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y el porqué de cad
 |---|---|---|
 | `OFFICE_PORT` | `8080` | Puerto local de la web. |
 | `WORKER_CONCURRENCY` | `4` | Llamadas a LLM simultáneas. |
+| `LINK_PORT` | `8090` | Puerto de enlace para servidores remotos y otras oficinas. |
+| `LINK_BIND` | `127.0.0.1` | Interfaz en la que escucha el puerto de enlace. `0.0.0.0` para aceptar otras máquinas. |
+| `LINK_PUBLIC_URL` | vacío | Dirección por la que los demás llegan a esta oficina (también se puede fijar desde la interfaz). |
+| `OFFICE_URL`, `NODE_TOKEN` | vacío | Solo para `docker-compose.node.yml`: oficina a la que se conecta un servidor remoto y su token. |
 | `INSTALL_AGENT_CLIS` | `true` | Instala `claude` y `codex` en la imagen. Ponlo a `false` para una imagen más ligera. |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` | vacío | Credenciales por entorno, como alternativa a guardarlas desde la interfaz. |
 
 ## Seguridad
 
 Es una herramienta **local y de un solo usuario**: no hay login y el puerto solo se publica en `127.0.0.1`. Las API keys que guardes desde la interfaz se almacenan en la base de datos SQLite del volumen `office-data` y nunca se devuelven al navegador. No la expongas a Internet tal cual.
+
+El puerto de enlace es lo único pensado para abrirse a otras máquinas: solo acepta conexiones con un token generado por la oficina. Ten en cuenta que una oficina conectada puede encargar trabajo a tus agentes (y gastar tus tokens), y que un servidor remoto ejecuta lo que le mande su oficina, incluido el proveedor «comando propio». Conecta solo oficinas y servidores de confianza y, fuera de una red privada, pon el enlace detrás de HTTPS o una VPN.
 
 ## Estado
 
