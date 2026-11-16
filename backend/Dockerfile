@@ -17,4 +17,4 @@ COPY --from=build /app/dist ./dist
 COPY package.json ./
 RUN mkdir -p /app/data /workspace && chown -R node:node /app/data /workspace
 USER node
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/gateway.js"]

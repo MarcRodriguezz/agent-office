@@ -30,7 +30,25 @@ if (token) {
   worker.on('ready', () => console.log(`worker listo (concurrencia ${concurrency})`));
   worker.on('completed', (job) => console.log(`✓ ${job.data.intent} · ${job.data.agentName} · ${job.data.provider.name}`));
   worker.on('failed', (job, err) => console.log(`✗ ${job?.data.intent} · ${job?.data.agentName}: ${err.message}`));
-  startNodeClient(`ws://${process.env.SERVER_HOST ?? 'server'}:${process.env.PORT ?? 3000}/internal/node`, concurrency);
+  const host = process.env.SERVER_HOST ?? 'server';
+  const clients = new Map<number, () => void>();
+  const sync = async () => {
+    try {
+      const ports = (await (await fetch(`http://${host}:3000/internal/offices`)).json()) as number[];
+      for (const port of ports) {
+        if (!clients.has(port)) clients.set(port, startNodeClient(`ws://${host}:${port}/internal/node`, concurrency));
+      }
+      for (const [port, stop] of clients) {
+        if (ports.includes(port)) continue;
+        stop();
+        clients.delete(port);
+      }
+    } catch {
+      return;
+    }
+  };
+  setInterval(() => void sync(), 5000);
+  void sync();
 
   const shutdown = async () => {
     await worker.close();

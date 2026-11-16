@@ -50,6 +50,8 @@ const agentColumns = (db.prepare('PRAGMA table_info(agents)').all() as Row[]).ma
 if (!agentColumns.includes('companion')) db.exec('ALTER TABLE agents ADD COLUMN companion TEXT');
 if (!agentColumns.includes('xp')) db.exec('ALTER TABLE agents ADD COLUMN xp INTEGER DEFAULT 0');
 if (!agentColumns.includes('node_id')) db.exec('ALTER TABLE agents ADD COLUMN node_id TEXT');
+const peerColumns = (db.prepare('PRAGMA table_info(peers)').all() as Row[]).map((r) => r.name);
+if (!peerColumns.includes('local')) db.exec('ALTER TABLE peers ADD COLUMN local INTEGER DEFAULT 0');
 const taskColumns = (db.prepare('PRAGMA table_info(tasks)').all() as Row[]).map((r) => r.name);
 if (!taskColumns.includes('origin')) db.exec('ALTER TABLE tasks ADD COLUMN origin TEXT');
 for (const row of db.prepare('SELECT id FROM agents WHERE companion IS NULL').all() as Row[]) {
@@ -197,13 +199,13 @@ export const store = {
   peers(): PeerRecord[] {
     return (db.prepare('SELECT * FROM peers ORDER BY created_at').all() as Row[]).map((r) => ({
       id: r.id, name: r.name ?? '', url: r.url ?? '', token: r.token, direction: r.direction, officeId: r.office_id ?? '',
-      createdAt: r.created_at,
+      createdAt: r.created_at, local: !!r.local,
     }));
   },
   savePeer(p: PeerRecord) {
-    db.prepare(`INSERT INTO peers (id, name, url, token, direction, office_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+    db.prepare(`INSERT INTO peers (id, name, url, token, direction, office_id, created_at, local) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name = excluded.name, office_id = excluded.office_id`)
-      .run(p.id, p.name, p.url, p.token, p.direction, p.officeId, p.createdAt);
+      .run(p.id, p.name, p.url, p.token, p.direction, p.officeId, p.createdAt, p.local ? 1 : 0);
   },
   deletePeer(id: string) {
     db.prepare('DELETE FROM peers WHERE id = ?').run(id);

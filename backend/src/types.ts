@@ -140,6 +140,7 @@ export interface NodeInfo {
 export type LoginAction = 'claude-login' | 'claude-logout' | 'codex-login' | 'codex-logout';
 
 export interface PeerRecord {
+  local?: boolean;
   id: string;
   name: string;
   url: string;

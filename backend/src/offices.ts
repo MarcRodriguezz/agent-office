@@ -30,17 +30,35 @@ function officeId(): string {
 
 const officeName = () => store.setting('officeName', 'Mi oficina');
 
-export const linkUrl = () =>
+const PREFIX = process.env.LINK_PREFIX ?? '';
+const LOCAL = /^http:\/\/127\.0\.0\.1:\d+$/;
+const baseOf = (url: string) => url.trim().replace(/\/+$/, '').replace(/\/o\/\d+$/, '');
+
+export const linkBase = () =>
   store.setting('linkUrl', '') || process.env.LINK_PUBLIC_URL || `http://host.docker.internal:${process.env.LINK_PORT ?? 8090}`;
+
+export const linkUrl = () => `${baseOf(linkBase())}${PREFIX}`;
+
+export const setLinkBase = (url: string) => store.setSetting('linkUrl', baseOf(url));
 
 export function officesState() {
   return {
-    office: { id: officeId(), name: officeName(), linkUrl: linkUrl() },
+    office: { id: officeId(), name: officeName(), linkUrl: linkUrl(), linkBase: baseOf(linkBase()) },
     peers: store.peers().map((p) => ({
-      id: p.id, name: p.name, direction: p.direction, url: p.url, online: links.has(p.id), pending: !p.officeId,
+      id: p.id, name: p.name, direction: p.direction, url: p.url, online: links.has(p.id), pending: !p.officeId, local: isLocal(p),
       directory: links.get(p.id)?.directory ?? null,
     })),
     remoteTasks: store.remoteTasks(),
+  };
+}
+
+const isLocal = (p: PeerRecord) => p.local || LOCAL.test(p.url);
+
+export function officeSummary() {
+  return {
+    officeId: officeId(), name: officeName(), people: store.agents().length, teams: store.teams().length,
+    working: store.tasks(60).filter((t) => !t.parentId && !t.finishedAt).length,
+    peers: store.peers().map((p) => ({ id: p.id, officeId: p.officeId, name: p.name, online: links.has(p.id), pending: !p.officeId, local: isLocal(p) })),
   };
 }
 
@@ -198,14 +216,34 @@ function dial(peer: PeerRecord) {
   });
 }
 
-export function createInvite(url: string): string {
-  const clean = url.trim().replace(/\/+$/, '');
-  if (!/^https?:\/\/\S+$/.test(clean)) throw new Error('La dirección de enlace debe empezar por http:// o https://');
-  store.setSetting('linkUrl', clean);
+export function inviteToken(local = false): string {
   const token = randomBytes(24).toString('hex');
-  store.savePeer({ id: randomUUID(), name: '', url: '', token, direction: 'in', officeId: '', createdAt: Date.now() });
+  store.savePeer({ id: randomUUID(), name: '', url: '', token, direction: 'in', officeId: '', createdAt: Date.now(), local });
   publishOffices();
-  return Buffer.from(JSON.stringify({ u: clean, t: token })).toString('base64url');
+  return token;
+}
+
+export function createInvite(url: string): string {
+  const clean = baseOf(url);
+  if (!/^https?:\/\/\S+$/.test(clean)) throw new Error('La dirección de enlace debe empezar por http:// o https://');
+  setLinkBase(clean);
+  return Buffer.from(JSON.stringify({ u: linkUrl(), t: inviteToken() })).toString('base64url');
+}
+
+export function joinWith(url: string, token: string) {
+  if (!token || !/^https?:\/\//.test(url)) throw new Error('El código de invitación no es válido.');
+  if (store.peers().some((p) => p.token === token)) throw new Error('Ese código ya está en uso en esta oficina.');
+  const peer: PeerRecord = { id: randomUUID(), name: '', url, token, direction: 'out', officeId: '', createdAt: Date.now(), local: LOCAL.test(url) };
+  store.savePeer(peer);
+  publishOffices();
+  dial(peer);
+}
+
+export function closeAll() {
+  for (const peer of store.peers()) {
+    links.get(peer.id)?.send({ type: 'bye' });
+    store.deletePeer(peer.id);
+  }
 }
 
 export function joinOffice(code: string) {
@@ -215,12 +253,7 @@ export function joinOffice(code: string) {
   } catch {
     throw new Error('El código de invitación no es válido.');
   }
-  if (!data.u || !data.t || !/^https?:\/\//.test(data.u)) throw new Error('El código de invitación no es válido.');
-  if (store.peers().some((p) => p.token === data.t)) throw new Error('Ese código ya está en uso en esta oficina.');
-  const peer: PeerRecord = { id: randomUUID(), name: '', url: data.u, token: data.t, direction: 'out', officeId: '', createdAt: Date.now() };
-  store.savePeer(peer);
-  publishOffices();
-  dial(peer);
+  joinWith(String(data.u ?? ''), String(data.t ?? ''));
 }
 
 export function leaveOffice(id: string) {

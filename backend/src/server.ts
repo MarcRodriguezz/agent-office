@@ -14,7 +14,8 @@ import {
   attachNode, createNode, dropClient, isRemote, LOCAL, nodeByToken, nodesState, refreshNode, removeNode, startTerm, termInput, termKill,
 } from './nodes.js';
 import {
-  acceptOffice, createInvite, joinOffice, leaveOffice, linkUrl, officesState, publishOffices, renameOffice, sendRemoteTask, startOffices,
+  acceptOffice, closeAll, createInvite, inviteToken, joinOffice, joinWith, leaveOffice, linkUrl, officeSummary, officesState, publishOffices,
+  renameOffice, sendRemoteTask, setLinkBase, startOffices,
 } from './offices.js';
 import { cleanCompanion, randomCompanion } from './companions.js';
 import { publishSettings, settings } from './settings.js';
@@ -52,6 +53,24 @@ app.get('/api/bootstrap', async () => ({
   offices: officesState(),
   visitors: visitorList(),
 }));
+
+app.get('/api/summary', async () => officeSummary());
+
+app.post('/internal/invite', async () => ({ token: inviteToken(true) }));
+
+app.post('/internal/join', async (req, reply) => {
+  try {
+    joinWith(text((req.body as any).url, 300), text((req.body as any).token, 200));
+    return { ok: true };
+  } catch (err) {
+    return reply.code(400).send({ error: (err as Error).message });
+  }
+});
+
+app.post('/internal/close', async () => {
+  closeAll();
+  return { ok: true };
+});
 
 app.get('/link/health', async () => ({ ok: true, office: settings().officeName }));
 
@@ -272,7 +291,7 @@ app.patch('/api/settings', async (req) => {
   if ('defaultProviderId' in b && store.provider(b.defaultProviderId)) store.setSetting('defaultProviderId', b.defaultProviderId);
   if (typeof b.officeName === 'string' && text(b.officeName)) renameOffice(text(b.officeName, 60));
   if (typeof b.linkUrl === 'string' && /^https?:\/\/\S+$/.test(text(b.linkUrl))) {
-    store.setSetting('linkUrl', text(b.linkUrl, 300).replace(/\/+$/, ''));
+    setLinkBase(text(b.linkUrl, 300));
     publishOffices();
   }
   publishSettings();

@@ -51,6 +51,7 @@ async function describe(concurrency: number): Promise<NodeInfo> {
 
 export function startNodeClient(url: string, concurrency: number) {
   let ws: WebSocket | null = null;
+  let stopped = false;
   let active = 0;
   const waiting: (() => void)[] = [];
   const terms = new Map<string, ChildProcess>();
@@ -107,6 +108,7 @@ export function startNodeClient(url: string, concurrency: number) {
   };
 
   const connect = () => {
+    if (stopped) return;
     const socket = new WebSocket(url);
     ws = socket;
     socket.addEventListener('open', () => {
@@ -128,6 +130,11 @@ export function startNodeClient(url: string, concurrency: number) {
     });
   };
 
-  setInterval(() => send({ type: 'ping' }), 25000);
+  const beat = setInterval(() => send({ type: 'ping' }), 25000);
   connect();
+  return () => {
+    stopped = true;
+    clearInterval(beat);
+    ws?.close();
+  };
 }
