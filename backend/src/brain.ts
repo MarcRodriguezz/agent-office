@@ -3,11 +3,8 @@ import { levelOf, stageOf } from './companions.js';
 import { store } from './db.js';
 import { hub } from './hub.js';
 import { complete } from './llm.js';
-import {
-  BOSS_SEAT, BOSS_VISITOR_SPOTS, COFFEE_SPOTS, DESK_COUNT, ENTRANCE, HANGOUT_SPOTS, MEETING_SEATS,
-  deskSeat, deskVisitor, furniture, nearestWalkable, walkable, type Cell,
-} from './map.js';
-import { addActor, cellOf, face, removeActor, say, setStatus, walkTo, type Actor } from './sim.js';
+import { deskSeat, deskVisitor, map, mapData, nearestWalkable, setLayout, walkable, type Cell, type Desk } from './map.js';
+import { addActor, cellOf, face, remap, removeActor, say, setStatus, walkTo, type Actor } from './sim.js';
 import { publishSettings } from './settings.js';
 import type { Agent, Intent, LlmJob, Provider, Task, TaskOrigin, Team, Visitor } from './types.js';
 
@@ -219,9 +216,9 @@ export function chat(agentId: string, text: string) {
 
 function spotNearPlayer(self: Actor): Cell {
   const cell = cellOf(player);
-  if (sameCell(cell, BOSS_SEAT)) {
+  if (sameCell(cell, map.bossSeat)) {
     const others = [...runtimes.values()].map((r) => r.actor).filter((a) => a !== self);
-    return BOSS_VISITOR_SPOTS.find((s) => !others.some((a) => sameCell(cellOf(a), s))) ?? BOSS_VISITOR_SPOTS[0];
+    return map.bossVisitors.find((s) => !others.some((a) => sameCell(cellOf(a), s))) ?? map.bossVisitors[0];
   }
   return nearestWalkable(cell[0], cell[1] + 1, cell) ?? cell;
 }
@@ -303,7 +300,7 @@ async function delegate(rt: Runtime, task: Task, reports: Agent[]): Promise<stri
     void enqueue(member, async () => {
       if (over) return;
       setStatus(member.actor, 'walking');
-      await walkTo(member.actor, MEETING_SEATS[(i + 1) % MEETING_SEATS.length]);
+      await walkTo(member.actor, map.meetingSeats[(i + 1) % map.meetingSeats.length]);
       setStatus(member.actor, 'talking');
       arrived();
       await released;
@@ -312,7 +309,7 @@ async function delegate(rt: Runtime, task: Task, reports: Agent[]): Promise<stri
 
   setStatus(actor, 'walking');
   say(actor, '📣 ¡Reunión de equipo!', 3500);
-  await walkTo(actor, MEETING_SEATS[0]);
+  await walkTo(actor, map.meetingSeats[0]);
   face(actor, 'down');
   setStatus(actor, 'talking');
   await Promise.race([Promise.all(arrivals), sleep(45000)]);
@@ -364,7 +361,7 @@ async function deliver(rt: Runtime, task: Task) {
     return;
   }
   if (task.origin) {
-    await walkTo(actor, ENTRANCE);
+    await walkTo(actor, map.entrance);
     face(actor, 'down');
     setStatus(actor, 'talking');
     say(actor, ok ? `📨 Enviado a ${task.origin.office}: «${task.title}»` : `📨 Aviso a ${task.origin.office}: no ha salido «${task.title}»`, 4000);
@@ -453,7 +450,7 @@ async function visit(who: Omit<Visitor, 'id'>, title: string, ok: boolean, resul
   const id = `visitor-${randomUUID()}`;
   visitors.set(id, { ...who, id });
   hub.broadcast({ type: 'visitors', visitors: visitorList() });
-  const actor = addActor(id, 'visitor', ENTRANCE, null);
+  const actor = addActor(id, 'visitor', map.entrance, null);
   try {
     setStatus(actor, 'walking');
     say(actor, `👋 Vengo de ${who.office}`, 3000);
@@ -469,7 +466,7 @@ async function visit(who: Omit<Visitor, 'id'>, title: string, ok: boolean, resul
     if (ok) awardPlayer(20);
     await sleep(8000);
     setStatus(actor, 'walking');
-    await walkTo(actor, ENTRANCE);
+    await walkTo(actor, map.entrance);
   } finally {
     removeActor(id);
     visitors.delete(id);
@@ -522,7 +519,7 @@ async function idle(rt: Runtime) {
     const roll = Math.random();
     if (roll < 0.4) {
       setStatus(actor, 'break');
-      if (!(await walkTo(actor, pick(COFFEE_SPOTS))) || !alive()) return;
+      if (!(await walkTo(actor, pick(map.coffee))) || !alive()) return;
       face(actor, 'up');
       say(actor, '☕', 4000);
       if (!(await pause(rt, 5000))) return;
@@ -540,7 +537,7 @@ async function idle(rt: Runtime) {
       if (!(await pause(rt, 3200))) return;
     } else {
       setStatus(actor, 'break');
-      if (!(await walkTo(actor, pick(HANGOUT_SPOTS))) || !alive()) return;
+      if (!(await walkTo(actor, pick(map.hangouts))) || !alive()) return;
       say(actor, pick(['🤔', '📱', '🎧', '💡', '😌']), 3500);
       if (!(await pause(rt, 4500))) return;
     }
@@ -573,11 +570,14 @@ export function publishTeams() {
 }
 
 export function hire(data: Omit<Agent, 'id' | 'desk' | 'createdAt' | 'xp'>): Agent | null {
-  const used = new Set(store.agents().map((a) => a.desk));
-  const desk = Array.from({ length: DESK_COUNT }, (_, i) => i).find((i) => !used.has(i));
-  if (desk === undefined) return null;
-  const agent = store.saveAgent({ ...data, id: randomUUID(), desk, xp: 0, createdAt: Date.now() });
-  spawn(agent, ENTRANCE);
+  const others = store.agents();
+  if (others.length >= map.desks.length) return null;
+  const agent: Agent = { ...data, id: randomUUID(), desk: -1, xp: 0, createdAt: Date.now() };
+  agent.desk = seats([...others, agent]).get(agent.id) ?? -1;
+  if (agent.desk < 0) return null;
+  store.saveAgent(agent);
+  spawn(agent, map.entrance);
+  reseat();
   say(runtimes.get(agent.id)!.actor, '¡Hola a todos! 👋', 4000);
   feed(`${agent.name} se incorpora como ${agent.role}`);
   publishAgents();
@@ -589,6 +589,7 @@ export function updateAgent(id: string, patch: Partial<Agent>): Agent | null {
   if (!rt) return null;
   Object.assign(rt.agent, patch, { id, desk: rt.agent.desk, createdAt: rt.agent.createdAt, xp: rt.agent.xp });
   store.saveAgent(rt.agent);
+  if ('teamId' in patch) reseat();
   publishAgents();
   return rt.agent;
 }
@@ -604,6 +605,60 @@ export function fire(id: string): boolean {
   publishAgents();
   publishTeams();
   return true;
+}
+
+const rank = (desk: Desk, agent: Agent) =>
+  desk.agentId ? (desk.agentId === agent.id ? 0 : 4) : desk.teamId ? (desk.teamId === agent.teamId ? 1 : 3) : 2;
+
+function seats(agents: Agent[]): Map<string, number> {
+  const taken = new Set<number>();
+  const plan = new Map<string, number>();
+  const owners = new Set(map.desks.map((d) => d.agentId));
+  const order = [...agents].sort((a, b) => Number(owners.has(b.id)) - Number(owners.has(a.id)) || a.createdAt - b.createdAt);
+  for (const agent of order) {
+    let best = -1;
+    map.desks.forEach((desk, i) => {
+      if (taken.has(i)) return;
+      const better = best < 0 || rank(desk, agent) < rank(map.desks[best], agent);
+      const same = best >= 0 && rank(desk, agent) === rank(map.desks[best], agent) && i === agent.desk;
+      if (better || same) best = i;
+    });
+    if (best < 0) continue;
+    taken.add(best);
+    plan.set(agent.id, best);
+  }
+  return plan;
+}
+
+function reseat() {
+  const plan = seats([...runtimes.values()].map((rt) => rt.agent));
+  for (const rt of runtimes.values()) {
+    const desk = plan.get(rt.agent.id) ?? rt.agent.desk;
+    const seat = deskSeat(desk);
+    const moved = desk !== rt.agent.desk || !rt.actor.seat || !sameCell(rt.actor.seat, seat);
+    if (desk !== rt.agent.desk) {
+      rt.agent.desk = desk;
+      store.saveAgent(rt.agent);
+    }
+    rt.actor.seat = seat;
+    if (moved && !rt.actor.moving && ['idle', 'working', 'waiting'].includes(rt.actor.status)) void walkTo(rt.actor, seat);
+  }
+}
+
+export function applyLayout(input: unknown) {
+  const teams = new Set(store.teams().map((t) => t.id));
+  const people = new Set(store.agents().map((a) => a.id));
+  const draft = input as { rooms?: { teamId?: string | null; agentId?: string | null }[] };
+  for (const room of Array.isArray(draft?.rooms) ? draft.rooms : []) {
+    if (room.teamId && !teams.has(room.teamId)) room.teamId = null;
+    if (room.agentId && !people.has(room.agentId)) room.agentId = null;
+  }
+  store.setSetting('layout', setLayout(input, runtimes.size));
+  player.seat = map.bossSeat;
+  remap();
+  reseat();
+  hub.broadcast({ type: 'map', map: mapData() });
+  publishAgents();
 }
 
 export type GoTarget =
@@ -624,7 +679,7 @@ export function playerGo(target: GoTarget): Promise<boolean> {
       cell = rt.actor.seated ? deskVisitor(rt.agent.desk) : nearestWalkable(at[0], at[1] + 1, at);
     }
   } else {
-    cell = furniture.find((f) => f.id === target.id)?.spot ?? null;
+    cell = map.furniture.find((f) => f.id === target.id)?.spot ?? null;
   }
   return cell ? walkTo(player, cell) : Promise.resolve(false);
 }
@@ -640,8 +695,13 @@ export function playerSay(text: string) {
 }
 
 export function initOffice() {
-  player = addActor('player', 'player', BOSS_SEAT, BOSS_SEAT);
-  for (const agent of store.agents()) spawn(agent, deskSeat(agent.desk));
+  player = addActor('player', 'player', map.bossSeat, map.bossSeat);
+  const plan = seats(store.agents());
+  for (const agent of store.agents()) {
+    const desk = plan.get(agent.id) ?? agent.desk;
+    if (desk !== agent.desk) store.saveAgent(Object.assign(agent, { desk }));
+    spawn(agent, deskSeat(agent.desk));
+  }
   setInterval(() => {
     const now = Date.now();
     for (const rt of runtimes.values()) {

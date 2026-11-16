@@ -1,5 +1,5 @@
 import { hub } from './hub.js';
-import { findPath, type Cell } from './map.js';
+import { findPath, map, nearestWalkable, walkable, type Cell } from './map.js';
 
 export type Facing = 'down' | 'up' | 'left' | 'right';
 export type Status = 'idle' | 'walking' | 'working' | 'thinking' | 'talking' | 'visiting' | 'waiting' | 'break';
@@ -115,6 +115,33 @@ function step(actor: Actor, dt: number) {
     actor.onArrive = null;
     done?.(true);
   }
+}
+
+export function remap() {
+  for (const actor of actors.values()) {
+    const target = actor.path[actor.path.length - 1];
+    let at = cellOf(actor);
+    if (!walkable(at[0], at[1])) {
+      at = nearestWalkable(at[0], at[1]) ?? map.entrance;
+      actor.x = at[0];
+      actor.y = at[1];
+    }
+    actor.seated = isAtSeat(actor);
+    if (!actor.moving) continue;
+    const path = target ? findPath(at, target) : null;
+    if (path?.length) {
+      actor.x = at[0];
+      actor.y = at[1];
+      actor.path = path;
+    } else {
+      actor.path = [];
+      actor.moving = false;
+      const done = actor.onArrive;
+      actor.onArrive = null;
+      done?.(!!path);
+    }
+  }
+  dirty = true;
 }
 
 export function snapshot() {

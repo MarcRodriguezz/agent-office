@@ -3,11 +3,11 @@ import websocket from '@fastify/websocket';
 import { store } from './db.js';
 import { hub } from './hub.js';
 import { complete, jobsState } from './llm.js';
-import { mapData } from './map.js';
+import { DEFAULT_LAYOUT, loadLayout, mapData } from './map.js';
 import { seed } from './seed.js';
 import { snapshot, startSim } from './sim.js';
 import {
-  assignTask, assignTeamTask, chat, dismiss, fire, hire, initOffice, playerGo, playerSay, publishAgents,
+  applyLayout, assignTask, assignTeamTask, chat, dismiss, fire, hire, initOffice, playerGo, playerSay, publishAgents,
   playerStep, publishTeams, summon, updateAgent, visitorList, type GoTarget,
 } from './brain.js';
 import {
@@ -27,6 +27,7 @@ const publicProvider = (p: Provider) => ({ ...p, apiKey: '', hasKey: !!p.apiKey 
 const publishProviders = () => hub.broadcast({ type: 'providers', providers: store.providers().map(publicProvider) });
 
 seed();
+loadLayout(store.setting('layout', null));
 store.failUnfinishedTasks();
 initOffice();
 startSim();
@@ -38,7 +39,7 @@ await app.register(websocket);
 app.get('/api/health', async () => ({ ok: true }));
 
 app.get('/api/bootstrap', async () => ({
-  map: mapData,
+  map: mapData(),
   actors: snapshot(),
   agents: store.agents(),
   teams: store.teams(),
@@ -100,7 +101,7 @@ app.post('/api/agents', async (req, reply) => {
     instructions: text(b.instructions), providerId: b.providerId || null, model: text(b.model, 120),
     teamId: b.teamId || null, nodeId: isRemote(b.nodeId) ? b.nodeId : null, appearance: b.appearance, companion: cleanCompanion(b.companion) ?? randomCompanion(),
   });
-  if (!agent) return reply.code(409).send({ error: 'La oficina está llena: no quedan mesas libres.' });
+  if (!agent) return reply.code(409).send({ error: 'No quedan mesas libres: amplía la oficina en el modo arquitecto.' });
   return agent;
 });
 
@@ -276,6 +277,15 @@ app.patch('/api/settings', async (req) => {
   }
   publishSettings();
   return settings();
+});
+
+app.put('/api/layout', async (req, reply) => {
+  try {
+    applyLayout((req.body as any)?.reset ? structuredClone(DEFAULT_LAYOUT) : (req.body as any)?.layout);
+    return mapData();
+  } catch (err) {
+    return reply.code(400).send({ error: (err as Error).message });
+  }
 });
 
 app.get('/api/jobs', async () => jobsState());
