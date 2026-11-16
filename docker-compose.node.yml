@@ -1,0 +1,28 @@
+name: agent-office-node
+
+services:
+  node:
+    build:
+      context: ./backend
+      args:
+        INSTALL_AGENT_CLIS: ${INSTALL_AGENT_CLIS:-true}
+    image: agent-office-backend
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    environment:
+      OFFICE_URL: ${OFFICE_URL:?Indica OFFICE_URL, la dirección de enlace de la oficina}
+      NODE_TOKEN: ${NODE_TOKEN:?Indica NODE_TOKEN, el token que te da la oficina al añadir el servidor}
+      WORKSPACE_DIR: /workspace
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - node-workspace:/workspace
+      - node-home:/home/node
+
+volumes:
+  node-workspace:
+  node-home:

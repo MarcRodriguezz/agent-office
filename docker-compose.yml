@@ -15,6 +15,8 @@ x-backend: &backend
     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    LINK_PORT: ${LINK_PORT:-8090}
+    LINK_PUBLIC_URL: ${LINK_PUBLIC_URL:-}
   extra_hosts:
     - "host.docker.internal:host-gateway"
   depends_on:
@@ -42,6 +44,7 @@ services:
     command: ["node", "dist/worker.js"]
     volumes:
       - workspace:/workspace
+      - agent-home:/home/node
 
   web:
     build: ./web
@@ -50,7 +53,9 @@ services:
       - server
     ports:
       - "127.0.0.1:${OFFICE_PORT:-8080}:80"
+      - "${LINK_BIND:-127.0.0.1}:${LINK_PORT:-8090}:81"
 
 volumes:
   office-data:
   workspace:
+  agent-home:
