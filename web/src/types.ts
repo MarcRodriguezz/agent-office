@@ -36,6 +36,7 @@ export interface Agent {
   providerId: string | null;
   model: string;
   teamId: string | null;
+  nodeId: string | null;
   appearance: Appearance;
   companion: Companion;
   xp: number;
@@ -69,6 +70,7 @@ export interface Task {
   result: string;
   createdAt: number;
   finishedAt: number | null;
+  origin: { peerId: string; taskId: string; office: string } | null;
 }
 
 export interface FeedEvent {
@@ -82,6 +84,7 @@ export interface JobInfo {
   agentName: string;
   intent: string;
   provider: string;
+  node: string;
   status: 'waiting' | 'active' | 'completed' | 'failed';
   startedAt: number;
   ms: number | null;
@@ -101,11 +104,12 @@ export interface Settings {
   playerCompanion: Companion | null;
   playerXp: number;
   defaultProviderId: string | null;
+  officeName: string;
 }
 
 export interface ActorSnap {
   id: string;
-  kind: 'player' | 'agent';
+  kind: 'player' | 'agent' | 'visitor';
   x: number;
   y: number;
   facing: Facing;
@@ -133,7 +137,7 @@ export interface Furniture {
   w: number;
   h: number;
   block: boolean;
-  interact?: 'llm' | 'hire' | 'tasks' | 'coffee';
+  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices';
   label?: string;
   spot?: [number, number];
 }
@@ -152,3 +156,76 @@ export type GoTarget =
   | { kind: 'cell'; x: number; y: number }
   | { kind: 'agent'; id: string }
   | { kind: 'spot'; id: string };
+
+export interface CliAuth {
+  installed: boolean;
+  version: string;
+  loggedIn: boolean;
+  detail: string;
+}
+
+export interface NodeState {
+  id: string;
+  name: string;
+  local: boolean;
+  online: boolean;
+  active: number;
+  info: { host: string; concurrency: number; claude: CliAuth; codex: CliAuth } | null;
+}
+
+export type LoginAction = 'claude-login' | 'claude-logout' | 'codex-login' | 'codex-logout';
+
+export interface DirectoryAgent {
+  id: string;
+  name: string;
+  role: string;
+  teamId: string | null;
+  appearance: Appearance;
+  companion: Companion;
+  xp: number;
+}
+
+export interface Directory {
+  boss: string;
+  agents: DirectoryAgent[];
+  teams: { id: string; name: string; color: string; leadId: string | null }[];
+}
+
+export interface PeerState {
+  id: string;
+  name: string;
+  direction: 'in' | 'out';
+  url: string;
+  online: boolean;
+  pending: boolean;
+  directory: Directory | null;
+}
+
+export interface RemoteTask {
+  id: string;
+  peerId: string;
+  targetKind: 'agent' | 'team';
+  targetId: string;
+  targetName: string;
+  title: string;
+  description: string;
+  status: 'sent' | 'working' | 'done' | 'failed';
+  result: string;
+  createdAt: number;
+  finishedAt: number | null;
+}
+
+export interface OfficesState {
+  office: { id: string; name: string; linkUrl: string };
+  peers: PeerState[];
+  remoteTasks: RemoteTask[];
+}
+
+export interface Visitor {
+  id: string;
+  name: string;
+  office: string;
+  appearance: Appearance;
+  companion: Companion | null;
+  xp: number;
+}

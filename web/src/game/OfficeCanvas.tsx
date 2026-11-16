@@ -24,6 +24,7 @@ export function runInteraction(f: Furniture) {
   if (f.interact === 'llm') setState({ modal: { kind: 'settings' } });
   else if (f.interact === 'hire') setState({ modal: { kind: 'people' } });
   else if (f.interact === 'tasks') setState({ modal: { kind: 'tasks' } });
+  else if (f.interact === 'offices') setState({ modal: { kind: 'offices' } });
   else if (f.interact === 'coffee') sayAsPlayer('☕ Mmm, café');
 }
 
@@ -304,6 +305,7 @@ export function OfficeCanvas() {
       const agents = new Map(state.agents.map((a) => [a.id, a]));
       const teams = new Map(state.teams.map((t) => [t.id, t]));
       const deskOwner = new Map(state.agents.map((a) => [a.desk, a]));
+      const guests = new Map(state.visitors.map((v) => [v.id, v]));
 
       for (const a of world.actors.values()) {
         const mine = a.kind === 'player';
@@ -335,7 +337,7 @@ export function OfficeCanvas() {
       for (const a of world.actors.values()) {
         const appearance = a.kind === 'player'
           ? state.settings.playerAppearance ?? DEFAULT_APPEARANCE
-          : agents.get(a.id)?.appearance ?? DEFAULT_APPEARANCE;
+          : (agents.get(a.id) ?? guests.get(a.id))?.appearance ?? DEFAULT_APPEARANCE;
         const [fx, fy] = feet(a);
         drawables.push({
           y: (a.ry + 0.5) * T + 14,
@@ -345,7 +347,7 @@ export function OfficeCanvas() {
         });
       }
       for (const a of world.actors.values()) {
-        const owner = agents.get(a.id);
+        const owner = agents.get(a.id) ?? guests.get(a.id);
         const companion = a.kind === 'player' ? state.settings.playerCompanion : owner?.companion;
         if (!companion) continue;
         const stage = stageOf(levelOf(a.kind === 'player' ? state.settings.playerXp : owner?.xp ?? 0));
@@ -385,6 +387,8 @@ export function OfficeCanvas() {
         if (a.kind === 'player') drawTag(a, `${state.settings.playerName} (tú) · Nv ${levelOf(state.settings.playerXp)}`, '#ffd76a', false);
         else {
           const agent = agents.get(a.id);
+          const guest = guests.get(a.id);
+          if (guest) drawTag(a, `${guest.name} · ${guest.office}`, '#38b6c9', false);
           if (agent) drawTag(a, `${agent.name} · Nv ${levelOf(agent.xp)}`, agent.teamId ? teams.get(agent.teamId)?.color ?? null : null, a.id === state.selectedAgentId);
         }
       }

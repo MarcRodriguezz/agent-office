@@ -17,7 +17,7 @@ export function TasksModal({ taskId }: { taskId?: string }) {
       <button className="taskrow" onClick={() => setOpenId(openId === t.id ? null : t.id)}>
         <span className={`pill ${TASK_STATUS[t.status].cls}`}>{TASK_STATUS[t.status].label}</span>
         <strong>{t.title}</strong>
-        <small>{nameOf(t.agentId)} · {timeAgo(t.createdAt)}</small>
+        <small>{t.origin ? `📨 ${t.origin.office} · ` : ''}{nameOf(t.agentId)} · {timeAgo(t.createdAt)}</small>
       </button>
       {openId === t.id && (
         <div className="taskbody">

@@ -18,13 +18,15 @@ export function TopBar() {
   const connected = useStore((s) => s.connected);
   const jobs = useStore((s) => s.jobs);
   const running = jobs.active + jobs.waiting;
+  const linked = useStore((s) => s.offices.peers.filter((p) => p.online).length);
+  const officeName = useStore((s) => s.settings.officeName);
   const openTasks = useStore((s) => s.tasks.filter((t) => !t.parentId && (t.status === 'working' || t.status === 'delegating' || t.status === 'queued')).length);
   return (
     <div className="topbar">
       <div className="brand">
         <span className="logo">🏢</span>
         <div>
-          <strong>Agent Office</strong>
+          <strong>{officeName}</strong>
           <small className={connected ? 'ok' : 'bad'}>{connected ? 'en línea' : 'reconectando…'}</small>
         </div>
       </div>
@@ -36,6 +38,9 @@ export function TopBar() {
           📋 Tareas {openTasks > 0 && <span className="badge">{openTasks}</span>}
         </button>
         <button onClick={() => setState({ modal: { kind: 'album' } })}>📖 Álbum de compis</button>
+        <button onClick={() => { void go({ kind: 'spot', id: 'link-globe' }); setState({ modal: { kind: 'offices' } }); }}>
+          🌐 Oficinas {linked > 0 && <span className="badge">{linked}</span>}
+        </button>
         <button onClick={() => { void go({ kind: 'spot', id: 'boss-desk' }); setState({ modal: { kind: 'settings' } }); }}>
           ⚙️ LLM y ajustes
         </button>
@@ -69,7 +74,7 @@ export function Roster() {
               <button key={a.id} className={`person ${selected === a.id ? 'active' : ''}`} onClick={() => void selectAgent(a.id)}>
                 <Avatar appearance={a.appearance} size={34} bg={`${g.color}55`} />
                 <span>
-                  <strong>{a.name}{lead && <em title="Responsable"> ★</em>}</strong>
+                  <strong>{a.name}{lead && <em title="Responsable"> ★</em>}{a.nodeId && <span title="Trabaja en un servidor remoto"> 🛰</span>}</strong>
                   <small className={`st-${st}`}>Nv {levelOf(a.xp)} · {STATUS_LABEL[st]}</small>
                 </span>
               </button>

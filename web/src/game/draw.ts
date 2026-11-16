@@ -351,6 +351,33 @@ export function drawFurniture(ctx: Ctx, f: Furniture, info: FurnitureInfo) {
       }
       break;
     }
+    case 'globe': {
+      box(ctx, px + 10, py + 18, 28, 20, 14, '#3a4258', '#252b3b', 5);
+      ctx.strokeStyle = '#c9a55a';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(cx, py - 12, 17, -Math.PI * 0.35, Math.PI * 0.85);
+      ctx.stroke();
+      ctx.fillStyle = '#c9a55a';
+      ctx.fillRect(cx - 1.5, py + 2, 3, 6);
+      dot(ctx, cx, py - 12, 14, '#3f8fd6');
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, py - 12, 14, 0, Math.PI * 2);
+      ctx.clip();
+      const spin = (time * 9) % 40;
+      for (let i = -1; i < 3; i++) {
+        dot(ctx, cx - 26 + spin + i * 40, py - 16, 6, '#4fbf7a');
+        dot(ctx, cx - 16 + spin + i * 40, py - 8, 5, '#4fbf7a');
+        dot(ctx, cx - 4 + spin + i * 40, py - 20, 3.5, '#4fbf7a');
+      }
+      ctx.restore();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.beginPath();
+      ctx.ellipse(cx - 5, py - 18, 4, 6, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
     case 'cooler': {
       box(ctx, px + 12, py + 16, 24, 22, 22, '#f2f5f8', '#cfd6de', 4);
       ctx.fillStyle = 'rgba(120, 195, 245, 0.85)';
@@ -423,7 +450,7 @@ export function drawFurniture(ctx: Ctx, f: Furniture, info: FurnitureInfo) {
   }
 }
 
-export const INTERACT_ICON: Record<string, string> = { llm: '⚙️', hire: '🧑‍💼', tasks: '📋', coffee: '☕' };
+export const INTERACT_ICON: Record<string, string> = { llm: '⚙️', hire: '🧑‍💼', tasks: '📋', coffee: '☕', offices: '🌐' };
 
 export function wrapText(ctx: Ctx, text: string, maxWidth: number, maxLines = 5): string[] {
   const lines: string[] = [];

@@ -6,6 +6,7 @@ import { AgentEditor } from './ui/AgentEditor';
 import { AgentPanel } from './ui/AgentPanel';
 import { AlbumModal, DialogBox, StarterModal } from './ui/Companions';
 import { Feed, Roster, Toasts, TopBar } from './ui/Hud';
+import { OfficesModal } from './ui/OfficesModal';
 import { PeopleModal } from './ui/PeopleModal';
 import { SettingsModal } from './ui/SettingsModal';
 import { TasksModal } from './ui/TasksModal';
@@ -53,6 +54,7 @@ export function App() {
       {modal?.kind === 'settings' && <SettingsModal tab={modal.tab} />}
       {modal?.kind === 'people' && <PeopleModal />}
       {modal?.kind === 'album' && <AlbumModal />}
+      {modal?.kind === 'offices' && <OfficesModal />}
       {!hasCompanion && <StarterModal />}
       {modal?.kind === 'agent' && <AgentEditor key={modal.id ?? 'new'} id={modal.id} teamId={modal.teamId} />}
       {modal?.kind === 'tasks' && <TasksModal taskId={modal.taskId} />}

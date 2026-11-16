@@ -1,5 +1,5 @@
 import { applyActors, getState, setState, toast, world } from './store';
-import type { ChatMessage, GoTarget, Task } from './types';
+import type { ChatMessage, GoTarget, LoginAction, Task } from './types';
 
 export async function api<T = any>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -15,6 +15,8 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
 let socket: WebSocket | null = null;
 let tokenSeq = 0;
 const waiting = new Map<number, (ok: boolean) => void>();
+const termStarts = new Map<number, (sid: string | null) => void>();
+const terms = new Map<string, { onData: (data: string) => void; onExit: (code: number) => void }>();
 
 function addMessage(message: ChatMessage) {
   setState((s) => {
@@ -60,6 +62,29 @@ function handle(msg: any) {
         setState({ dialog: { agentId: msg.message.agentId, text: msg.message.text } });
       }
       break;
+    case 'nodes':
+      setState({ nodes: msg.nodes });
+      break;
+    case 'offices':
+      setState({ offices: msg.offices });
+      break;
+    case 'visitors':
+      setState({ visitors: msg.visitors });
+      break;
+    case 'dialog':
+      setState({ dialog: { guest: { name: msg.name, appearance: msg.appearance, companion: msg.companion, xp: msg.xp }, text: msg.text } });
+      break;
+    case 'term-started':
+      termStarts.get(msg.ref)?.(msg.sid);
+      termStarts.delete(msg.ref);
+      break;
+    case 'term':
+      terms.get(msg.sid)?.onData(msg.data);
+      break;
+    case 'term-exit':
+      terms.get(msg.sid)?.onExit(msg.code);
+      terms.delete(msg.sid);
+      break;
     case 'levelup':
       world.effects.push({ actorId: msg.actorId, at: performance.now(), level: msg.level, evolved: msg.evolved });
       break;
@@ -89,6 +114,8 @@ function connect() {
     setState({ connected: false });
     waiting.forEach((resolve) => resolve(false));
     waiting.clear();
+    terms.forEach((t) => t.onExit(1));
+    terms.clear();
     setTimeout(() => void bootstrap().catch(() => connect()), 1500);
   };
 }
@@ -99,6 +126,7 @@ export async function bootstrap() {
   setState({
     ready: true, map: data.map, agents: data.agents, teams: data.teams, providers: data.providers,
     settings: data.settings, tasks: data.tasks, feed: data.feed, jobs: data.jobs,
+    nodes: data.nodes, offices: data.offices, visitors: data.visitors,
   });
   connect();
 }
@@ -108,6 +136,23 @@ export function go(target: GoTarget): Promise<boolean> {
   const token = ++tokenSeq;
   socket.send(JSON.stringify({ type: 'go', token, target }));
   return new Promise((resolve) => waiting.set(token, resolve));
+}
+
+export async function openTerm(nodeId: string, action: LoginAction, onData: (data: string) => void, onExit: (code: number) => void) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return null;
+  const ws = socket;
+  const ref = ++tokenSeq;
+  ws.send(JSON.stringify({ type: 'term-start', ref, nodeId, action }));
+  const sid = await new Promise<string | null>((resolve) => {
+    termStarts.set(ref, resolve);
+    setTimeout(() => resolve(null), 8000);
+  });
+  if (!sid) return null;
+  terms.set(sid, { onData, onExit });
+  return {
+    input: (data: string) => ws.send(JSON.stringify({ type: 'term-input', sid, data })),
+    kill: () => ws.send(JSON.stringify({ type: 'term-kill', sid })),
+  };
 }
 
 export function step(dx: number, dy: number) {

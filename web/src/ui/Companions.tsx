@@ -200,20 +200,23 @@ export function DialogBox() {
     return () => window.removeEventListener('keydown', onKey);
   }, [dialog, text.length]);
 
-  if (!dialog || !agent || modal) return null;
+  const who = agent ?? dialog?.guest;
+  if (!dialog || !who || modal) return null;
   const done = shown >= text.length;
   return (
     <div className="dialogbox">
       <div className="portrait">
-        <Avatar appearance={agent.appearance} size={64} />
-        <CreatureView species={agent.companion.species} stage={stageOf(levelOf(agent.xp))} size={34} />
+        <Avatar appearance={who.appearance} size={64} />
+        {who.companion && <CreatureView species={who.companion.species} stage={stageOf(levelOf(who.xp))} size={34} />}
       </div>
       <div className="speech">
-        <strong>{agent.name}</strong>
+        <strong>{who.name}</strong>
         <p>{text.slice(0, shown)}{done && <span className="next">▼</span>}</p>
       </div>
       <div className="dialogactions">
-        <button className="primary" onClick={() => void selectAgent(agent.id, false)}>{full.length > 300 ? 'Leer todo' : 'Responder'}</button>
+        {agent
+          ? <button className="primary" onClick={() => void selectAgent(agent.id, false)}>{full.length > 300 ? 'Leer todo' : 'Responder'}</button>
+          : <button className="primary" onClick={() => setState({ dialog: null, modal: { kind: 'offices' } })}>Ver encargo</button>}
         <button onClick={() => setState({ dialog: null })}>Cerrar</button>
       </div>
     </div>

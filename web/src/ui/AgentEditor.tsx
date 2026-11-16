@@ -67,6 +67,7 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
   const existing = useStore((s) => s.agents.find((a) => a.id === id));
   const teams = useStore((s) => s.teams);
   const providers = useStore((s) => s.providers);
+  const nodes = useStore((s) => s.nodes);
   const [form, setForm] = useState(() => ({
     name: existing?.name ?? '',
     role: existing?.role ?? '',
@@ -74,6 +75,7 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
     instructions: existing?.instructions ?? '',
     providerId: existing?.providerId ?? '',
     model: existing?.model ?? '',
+    nodeId: existing?.nodeId ?? '',
     teamId: existing?.teamId ?? teamId ?? '',
     appearance: existing?.appearance ?? randomAppearance(),
     companion: existing?.companion ?? randomCompanion(),
@@ -85,7 +87,7 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
   const save = async () => {
     setBusy(true);
     try {
-      const body = { ...form, providerId: form.providerId || null, teamId: form.teamId || null };
+      const body = { ...form, providerId: form.providerId || null, teamId: form.teamId || null, nodeId: form.nodeId || null };
       if (existing) await api('PATCH', `/agents/${existing.id}`, body);
       else await api('POST', '/agents', body);
       close();
@@ -132,9 +134,16 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
               </select>
             </label>
           </div>
-          <label>Modelo propio (opcional)
-            <input value={form.model} onChange={(e) => set({ model: e.target.value })} placeholder="Vacío = el modelo del proveedor" />
-          </label>
+          <div className="row">
+            <label>Modelo propio (opcional)
+              <input value={form.model} onChange={(e) => set({ model: e.target.value })} placeholder="Vacío = el modelo del proveedor" />
+            </label>
+            <label>Dónde se ejecuta
+              <select value={form.nodeId} onChange={(e) => set({ nodeId: e.target.value })}>
+                {nodes.map((n) => <option key={n.id} value={n.local ? '' : n.id}>{n.local ? 'En esta oficina' : `🛰 ${n.name}${n.online ? '' : ' (desconectado)'}`}</option>)}
+              </select>
+            </label>
+          </div>
           <footer>
             {existing && <button className="danger" onClick={() => void remove()}>Despedir</button>}
             <span />

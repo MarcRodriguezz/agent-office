@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from 'react';
 import type {
-  ActorSnap, Agent, ChatMessage, FeedEvent, JobsState, MapData, Provider, Settings, Task, Team,
+  ActorSnap, Agent, Appearance, ChatMessage, Companion, FeedEvent, JobsState, MapData, NodeState, OfficesState, Provider, Settings, Task,
+  Team, Visitor,
 } from './types';
 
 export type Modal =
-  | { kind: 'settings'; tab?: 'providers' | 'profile' | 'jobs' }
+  | { kind: 'settings'; tab?: 'providers' | 'nodes' | 'profile' | 'jobs' }
+  | { kind: 'offices' }
   | { kind: 'people' }
   | { kind: 'album' }
   | { kind: 'agent'; id?: string; teamId?: string }
@@ -33,7 +35,16 @@ export interface State {
   selectedAgentId: string | null;
   modal: Modal;
   toasts: Toast[];
-  dialog: { agentId: string; text: string } | null;
+  dialog: Dialog | null;
+  nodes: NodeState[];
+  offices: OfficesState;
+  visitors: Visitor[];
+}
+
+export interface Dialog {
+  agentId?: string;
+  guest?: { name: string; appearance: Appearance; companion: Companion | null; xp: number };
+  text: string;
 }
 
 export interface RenderActor extends ActorSnap {
@@ -60,7 +71,7 @@ let state: State = {
   agents: [],
   teams: [],
   providers: [],
-  settings: { playerName: 'Jefe', playerAppearance: null, playerCompanion: null, playerXp: 0, defaultProviderId: null },
+  settings: { playerName: 'Jefe', playerAppearance: null, playerCompanion: null, playerXp: 0, defaultProviderId: null, officeName: 'Mi oficina' },
   tasks: [],
   feed: [],
   jobs: { jobs: [], totals: { completed: 0, failed: 0 }, waiting: 0, active: 0 },
@@ -69,6 +80,9 @@ let state: State = {
   modal: null,
   toasts: [],
   dialog: null,
+  nodes: [],
+  offices: { office: { id: '', name: '', linkUrl: '' }, peers: [], remoteTasks: [] },
+  visitors: [],
 };
 
 const listeners = new Set<() => void>();

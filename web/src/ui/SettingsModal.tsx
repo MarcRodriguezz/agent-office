@@ -6,6 +6,7 @@ import type { Provider, ProviderKind } from '../types';
 import { AppearanceEditor } from './AgentEditor';
 import { Modal } from './common';
 import { CompanionPicker } from './Companions';
+import { Servers, Session } from './Servers';
 
 interface Preset {
   key: string;
@@ -28,8 +29,8 @@ const PRESETS: Preset[] = [
   { key: 'ollama', group: 'Local', label: 'Ollama (local)', kind: 'openai', baseUrl: 'http://host.docker.internal:11434/v1', model: 'llama3.2', help: 'Ollama en tu máquina, sin API key. Usa un modelo que tengas descargado (ollama list).' },
   { key: 'lmstudio', group: 'Local', label: 'LM Studio (local)', kind: 'openai', baseUrl: 'http://host.docker.internal:1234/v1', model: 'local-model', help: 'Activa el servidor local de LM Studio. Sin API key.' },
   { key: 'custom', group: 'Local', label: 'Otro compatible con OpenAI', kind: 'openai', baseUrl: 'http://host.docker.internal:8000/v1', model: '', help: 'Cualquier servidor con /chat/completions: vLLM, llama.cpp, LiteLLM, Azure…' },
-  { key: 'claude-code', group: 'Agentes CLI', label: 'Claude Code (tu suscripción)', kind: 'claude-code', baseUrl: '', model: '', help: 'Se ejecuta `claude -p` en el worker. Genera un token con `claude setup-token` y pégalo aquí (o ponlo en .env como CLAUDE_CODE_OAUTH_TOKEN). También acepta una API key de Anthropic.' },
-  { key: 'codex', group: 'Agentes CLI', label: 'Codex CLI (OpenAI)', kind: 'codex', baseUrl: '', model: '', help: 'Se ejecuta `codex exec` en el worker con tu API key de OpenAI.' },
+  { key: 'claude-code', group: 'Agentes CLI', label: 'Claude Code (tu suscripción)', kind: 'claude-code', baseUrl: '', model: '', help: 'Usa tu suscripción de Claude. Inicia sesión aquí abajo: se abre la página de Claude, autorizas y pegas el código. El token o la API key son opcionales, por si prefieres no iniciar sesión.' },
+  { key: 'codex', group: 'Agentes CLI', label: 'Codex CLI (OpenAI)', kind: 'codex', baseUrl: '', model: '', help: 'Usa tu cuenta de ChatGPT. Inicia sesión aquí abajo con el código de dispositivo. La API key de OpenAI es opcional, por si prefieres no iniciar sesión.' },
   { key: 'cli', group: 'Agentes CLI', label: 'Comando propio', kind: 'cli', baseUrl: '', model: '', help: 'Cualquier comando instalado en el worker: recibe el prompt por stdin y su salida es la respuesta.' },
   { key: 'mock', group: 'Sin LLM', label: 'Cerebro simulado', kind: 'mock', baseUrl: '', model: '', help: 'Respuestas de mentira para probar la oficina sin gastar tokens.' },
 ];
@@ -44,6 +45,8 @@ function ProviderForm({ draft, hasKey, onDone }: { draft: Draft; hasKey: boolean
   const [form, setForm] = useState(draft);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testNode, setTestNode] = useState('');
+  const nodes = useStore((s) => s.nodes);
   const defaultId = useStore((s) => s.settings.defaultProviderId);
   const set = (patch: Partial<Draft>) => setForm((f) => ({ ...f, ...patch }));
   const help = form.preset?.help ?? PRESETS.find((p) => p.kind === form.kind && p.baseUrl === form.baseUrl)?.help ?? PRESETS.find((p) => p.kind === form.kind)?.help;
@@ -65,7 +68,7 @@ function ProviderForm({ draft, hasKey, onDone }: { draft: Draft; hasKey: boolean
     setResult(null);
     const id = await save();
     if (id) {
-      const r = await api('POST', `/providers/${id}/test`).catch((e) => ({ ok: false, error: e.message, ms: 0 }));
+      const r = await api('POST', `/providers/${id}/test`, { nodeId: testNode }).catch((e) => ({ ok: false, error: e.message, ms: 0 }));
       setResult(r.ok ? { ok: true, text: `Conexión correcta en ${(r.ms / 1000).toFixed(1)} s · «${r.answer}»` } : { ok: false, text: r.error });
     }
     setBusy(false);
@@ -84,12 +87,20 @@ function ProviderForm({ draft, hasKey, onDone }: { draft: Draft; hasKey: boolean
       {needsKey && (
         <label>{form.kind === 'claude-code' ? 'Token o API key' : 'API key'}
           <input type="password" value={form.apiKey} autoComplete="off" onChange={(e) => set({ apiKey: e.target.value })}
-            placeholder={hasKey ? '•••••••• guardada (escribe para cambiarla)' : 'Opcional si es local o está en .env'} />
+            placeholder={hasKey ? '•••••••• guardada (escribe para cambiarla)' : form.kind === 'claude-code' || form.kind === 'codex' ? 'Opcional: no hace falta si inicias sesión' : 'Opcional si es local o está en .env'} />
         </label>
       )}
       {form.kind !== 'mock' && form.kind !== 'cli' && (
         <label>Modelo<input value={form.model} onChange={(e) => set({ model: e.target.value })}
           placeholder={form.kind === 'claude-code' || form.kind === 'codex' ? 'Vacío = el predeterminado del CLI' : 'nombre-del-modelo'} /></label>
+      )}
+      {(form.kind === 'claude-code' || form.kind === 'codex') && <Session cli={form.kind === 'codex' ? 'codex' : 'claude'} />}
+      {nodes.length > 1 && (
+        <label>Probar la conexión desde
+          <select value={testNode} onChange={(e) => setTestNode(e.target.value)}>
+            {nodes.map((n) => <option key={n.id} value={n.local ? '' : n.id}>{n.local ? 'Esta oficina' : `🛰 ${n.name}`}</option>)}
+          </select>
+        </label>
       )}
       {result && <p className={`result ${result.ok ? 'ok' : 'bad'}`}>{result.ok ? '✅' : '❌'} {result.text}</p>}
       <footer>
@@ -157,8 +168,9 @@ function Profile() {
   const [name, setName] = useState(settings.playerName);
   const [appearance, setAppearance] = useState(settings.playerAppearance ?? DEFAULT_APPEARANCE);
   const [companion, setCompanion] = useState(settings.playerCompanion);
+  const [office, setOffice] = useState(settings.officeName);
   const save = async () => {
-    await api('PATCH', '/settings', { playerName: name, playerAppearance: appearance, playerCompanion: companion }).catch((e) => toast(e.message, false));
+    await api('PATCH', '/settings', { playerName: name, playerAppearance: appearance, playerCompanion: companion, officeName: office }).catch((e) => toast(e.message, false));
     toast('Perfil guardado');
   };
   return (
@@ -166,6 +178,7 @@ function Profile() {
       <AppearanceEditor value={appearance} onChange={setAppearance} />
       <div className="fields">
         <label>Tu nombre (así te llamarán los agentes)<input value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <label>Nombre de esta oficina (así la verán las oficinas conectadas)<input value={office} onChange={(e) => setOffice(e.target.value)} /></label>
         {companion && <label>Tu compi<CompanionPicker value={companion} onChange={setCompanion} /></label>}
         <footer><span /><button className="primary" onClick={() => void save()}>Guardar perfil</button></footer>
       </div>
@@ -184,7 +197,7 @@ function Jobs() {
   }, []);
   return (
     <div className="jobsview">
-      <p className="hint">Cada vez que un agente piensa, se encola un trabajo en Redis (BullMQ) y lo ejecuta el contenedor <code>worker</code> en segundo plano, sin bloquear la oficina.</p>
+      <p className="hint">Cada vez que un agente piensa, se crea un trabajo en segundo plano. Los de esta oficina pasan por la cola de Redis (BullMQ) y los ejecuta el contenedor <code>worker</code>; los de agentes en servidores remotos se envían a su servidor.</p>
       <div className="counters">
         <div><strong>{jobs.waiting}</strong><small>en cola</small></div>
         <div><strong>{jobs.active}</strong><small>ejecutándose</small></div>
@@ -192,7 +205,7 @@ function Jobs() {
         <div><strong>{jobs.totals.failed}</strong><small>fallidos</small></div>
       </div>
       <table>
-        <thead><tr><th>Estado</th><th>Agente</th><th>Tipo</th><th>Proveedor</th><th>Duración</th></tr></thead>
+        <thead><tr><th>Estado</th><th>Agente</th><th>Tipo</th><th>Proveedor</th><th>Dónde</th><th>Duración</th></tr></thead>
         <tbody>
           {jobs.jobs.map((j) => (
             <tr key={j.id} title={j.error}>
@@ -201,26 +214,29 @@ function Jobs() {
               <td>{j.agentName}</td>
               <td>{INTENT[j.intent] ?? j.intent}</td>
               <td>{j.provider}</td>
+              <td>{j.node}</td>
               <td>{((j.ms ?? Date.now() - j.startedAt) / 1000).toFixed(1)} s</td>
             </tr>
           ))}
-          {!jobs.jobs.length && <tr><td colSpan={5} className="empty">Sin actividad todavía.</td></tr>}
+          {!jobs.jobs.length && <tr><td colSpan={6} className="empty">Sin actividad todavía.</td></tr>}
         </tbody>
       </table>
     </div>
   );
 }
 
-export function SettingsModal({ tab: initial }: { tab?: 'providers' | 'profile' | 'jobs' }) {
+export function SettingsModal({ tab: initial }: { tab?: 'providers' | 'nodes' | 'profile' | 'jobs' }) {
   const [tab, setTab] = useState(initial ?? 'providers');
   return (
     <Modal title="Tu ordenador" onClose={() => setState({ modal: null })} wide>
       <nav className="tabs">
         <button className={tab === 'providers' ? 'on' : ''} onClick={() => setTab('providers')}>🧠 Proveedores LLM</button>
+        <button className={tab === 'nodes' ? 'on' : ''} onClick={() => setTab('nodes')}>🖥 Servidores y sesiones</button>
         <button className={tab === 'jobs' ? 'on' : ''} onClick={() => setTab('jobs')}>⚡ Segundo plano</button>
         <button className={tab === 'profile' ? 'on' : ''} onClick={() => setTab('profile')}>🙂 Mi perfil</button>
       </nav>
       {tab === 'providers' && <Providers />}
+      {tab === 'nodes' && <Servers />}
       {tab === 'jobs' && <Jobs />}
       {tab === 'profile' && <Profile />}
     </Modal>
