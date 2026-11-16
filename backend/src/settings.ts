@@ -9,6 +9,7 @@ export function settings() {
     playerCompanion: store.setting<Companion | null>('playerCompanion', null),
     playerXp: store.setting('playerXp', 0),
     defaultProviderId: store.setting<string | null>('defaultProviderId', null),
+    officeName: store.setting('officeName', 'Mi oficina'),
   };
 }
 

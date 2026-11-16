@@ -21,7 +21,7 @@ export interface Furniture {
   w: number;
   h: number;
   block: boolean;
-  interact?: 'llm' | 'hire' | 'tasks' | 'coffee';
+  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices';
   label?: string;
   spot?: Cell;
 }
@@ -96,6 +96,7 @@ export const furniture: Furniture[] = [
   { id: 'hr-plant', type: 'plant', x: 32, y: 1, w: 1, h: 1, block: true },
   { id: 'hr-cabinet', type: 'cabinet', x: 40, y: 1, w: 3, h: 1, block: true },
   { id: 'hr-bench', type: 'sofa', x: 32, y: 5, w: 1, h: 3, block: true },
+  { id: 'link-globe', type: 'globe', x: 41, y: 6, w: 1, h: 1, block: true, interact: 'offices', label: 'Centralita · Otras oficinas', spot: [40, 6] },
 
   ...Array.from({ length: DESK_COUNT }, (_, i): Furniture => ({
     id: `desk-${i}`, type: 'desk', x: deskOrigin(i)[0], y: deskOrigin(i)[1], w: 3, h: 1, block: true,

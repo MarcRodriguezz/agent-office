@@ -1,6 +1,7 @@
 import { Queue, QueueEvents } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import { hub } from './hub.js';
+import { isRemote, nodeName, runOnNode } from './nodes.js';
 import { QUEUE_NAME, connection } from './queue-config.js';
 import type { JobInfo, LlmJob, LlmResult } from './types.js';
 
@@ -30,24 +31,33 @@ export function jobsState() {
   };
 }
 
-export async function complete(data: LlmJob): Promise<string> {
+async function runLocal(data: LlmJob, info: JobInfo): Promise<string> {
+  const job = await queue.add(data.intent, data, { attempts: 1, removeOnComplete: true, removeOnFail: true });
+  const jobId = job.id ?? '';
+  byJobId.set(jobId, info);
+  try {
+    return (await job.waitUntilFinished(events, TIMEOUT_MS)).text;
+  } finally {
+    byJobId.delete(jobId);
+  }
+}
+
+export async function complete(data: LlmJob, nodeId: string | null = null): Promise<string> {
+  const remote = isRemote(nodeId);
   const info: JobInfo = {
     id: randomUUID(), agentName: data.agentName, intent: data.intent,
     provider: `${data.provider.name}${data.provider.model ? ` · ${data.provider.model}` : ''}`,
-    status: 'waiting', startedAt: Date.now(), ms: null, error: '',
+    node: remote ? nodeName(nodeId) : 'Esta oficina',
+    status: remote ? 'active' : 'waiting', startedAt: Date.now(), ms: null, error: '',
   };
   recent.unshift(info);
   if (recent.length > 40) recent.pop();
   publish();
-  let jobId = '';
   try {
-    const job = await queue.add(data.intent, data, { attempts: 1, removeOnComplete: true, removeOnFail: true });
-    jobId = job.id ?? '';
-    byJobId.set(jobId, info);
-    const result = await job.waitUntilFinished(events, TIMEOUT_MS);
+    const text = remote ? await runOnNode(nodeId, data, TIMEOUT_MS) : await runLocal(data, info);
     info.status = 'completed';
     totals.completed++;
-    return result.text;
+    return text;
   } catch (err) {
     info.status = 'failed';
     info.error = err instanceof Error ? err.message : String(err);
@@ -55,7 +65,6 @@ export async function complete(data: LlmJob): Promise<string> {
     throw new Error(info.error);
   } finally {
     info.ms = Date.now() - info.startedAt;
-    byJobId.delete(jobId);
     publish();
   }
 }

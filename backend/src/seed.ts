@@ -28,7 +28,7 @@ export function seed() {
   const ids = people.map(([name, role, personality, teamId, appearance, species], desk) => {
     const id = randomUUID();
     store.saveAgent({
-      id, name, role, personality, instructions: '', providerId: null, model: '', teamId, appearance, desk,
+      id, name, role, personality, instructions: '', providerId: null, model: '', teamId, nodeId: null, appearance, desk,
       companion: { species, name: SPECIES[species] }, xp: 0, createdAt: Date.now() + desk,
     });
     return id;

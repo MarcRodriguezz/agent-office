@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomCompanion } from './companions.js';
-import type { Agent, Appearance, ChatMessage, FeedEvent, Provider, Task, Team } from './types.js';
+import type {
+  Agent, Appearance, ChatMessage, FeedEvent, NodeRecord, PeerRecord, Provider, RemoteTask, Task, Team,
+} from './types.js';
 
 const file = process.env.DB_PATH ?? './data/office.db';
 mkdirSync(dirname(file), { recursive: true });
@@ -32,6 +34,14 @@ db.exec(`
     id TEXT PRIMARY KEY, text TEXT, created_at INTEGER
   );
   CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+  CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, name TEXT, token TEXT, created_at INTEGER);
+  CREATE TABLE IF NOT EXISTS peers (
+    id TEXT PRIMARY KEY, name TEXT, url TEXT, token TEXT, direction TEXT, office_id TEXT, created_at INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS remote_tasks (
+    id TEXT PRIMARY KEY, peer_id TEXT, target_kind TEXT, target_id TEXT, target_name TEXT, title TEXT, description TEXT,
+    status TEXT, result TEXT, created_at INTEGER, finished_at INTEGER
+  );
 `);
 
 type Row = Record<string, any>;
@@ -39,6 +49,9 @@ type Row = Record<string, any>;
 const agentColumns = (db.prepare('PRAGMA table_info(agents)').all() as Row[]).map((r) => r.name);
 if (!agentColumns.includes('companion')) db.exec('ALTER TABLE agents ADD COLUMN companion TEXT');
 if (!agentColumns.includes('xp')) db.exec('ALTER TABLE agents ADD COLUMN xp INTEGER DEFAULT 0');
+if (!agentColumns.includes('node_id')) db.exec('ALTER TABLE agents ADD COLUMN node_id TEXT');
+const taskColumns = (db.prepare('PRAGMA table_info(tasks)').all() as Row[]).map((r) => r.name);
+if (!taskColumns.includes('origin')) db.exec('ALTER TABLE tasks ADD COLUMN origin TEXT');
 for (const row of db.prepare('SELECT id FROM agents WHERE companion IS NULL').all() as Row[]) {
   db.prepare('UPDATE agents SET companion = ? WHERE id = ?').run(JSON.stringify(randomCompanion()), row.id);
 }
@@ -50,7 +63,7 @@ const toProvider = (r: Row): Provider => ({
 
 const toAgent = (r: Row): Agent => ({
   id: r.id, name: r.name, role: r.role, personality: r.personality ?? '', instructions: r.instructions ?? '',
-  providerId: r.provider_id ?? null, model: r.model ?? '', teamId: r.team_id ?? null,
+  providerId: r.provider_id ?? null, model: r.model ?? '', teamId: r.team_id ?? null, nodeId: r.node_id ?? null,
   appearance: JSON.parse(r.appearance) as Appearance, desk: r.desk, createdAt: r.created_at,
   companion: JSON.parse(r.companion), xp: r.xp ?? 0,
 });
@@ -62,6 +75,7 @@ const toMessage = (r: Row): ChatMessage => ({
 const toTask = (r: Row): Task => ({
   id: r.id, agentId: r.agent_id, parentId: r.parent_id ?? null, title: r.title, description: r.description ?? '',
   status: r.status, result: r.result ?? '', createdAt: r.created_at, finishedAt: r.finished_at ?? null,
+  origin: r.origin ? JSON.parse(r.origin) : null,
 });
 
 export const store = {
@@ -89,14 +103,14 @@ export const store = {
     return db.prepare('SELECT * FROM agents ORDER BY created_at').all().map(toAgent);
   },
   saveAgent(a: Agent): Agent {
-    db.prepare(`INSERT INTO agents (id, name, role, personality, instructions, provider_id, model, team_id, appearance, desk, created_at, companion, xp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    db.prepare(`INSERT INTO agents (id, name, role, personality, instructions, provider_id, model, team_id, appearance, desk, created_at, companion, xp, node_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name = excluded.name, role = excluded.role, personality = excluded.personality,
       instructions = excluded.instructions, provider_id = excluded.provider_id, model = excluded.model,
       team_id = excluded.team_id, appearance = excluded.appearance, desk = excluded.desk,
-      companion = excluded.companion, xp = excluded.xp`)
+      companion = excluded.companion, xp = excluded.xp, node_id = excluded.node_id`)
       .run(a.id, a.name, a.role, a.personality, a.instructions, a.providerId, a.model, a.teamId,
-        JSON.stringify(a.appearance), a.desk, a.createdAt, JSON.stringify(a.companion), a.xp);
+        JSON.stringify(a.appearance), a.desk, a.createdAt, JSON.stringify(a.companion), a.xp, a.nodeId);
     return a;
   },
   deleteAgent(id: string) {
@@ -139,13 +153,13 @@ export const store = {
     const r = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
     return r ? toTask(r) : undefined;
   },
-  addTask(agentId: string, parentId: string | null, title: string, description: string): Task {
+  addTask(agentId: string, parentId: string | null, title: string, description: string, origin: Task['origin'] = null): Task {
     const t: Task = {
       id: randomUUID(), agentId, parentId, title, description, status: 'queued', result: '',
-      createdAt: Date.now(), finishedAt: null,
+      createdAt: Date.now(), finishedAt: null, origin,
     };
-    db.prepare('INSERT INTO tasks (id, agent_id, parent_id, title, description, status, result, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(t.id, agentId, parentId, title, description, t.status, '', t.createdAt);
+    db.prepare('INSERT INTO tasks (id, agent_id, parent_id, title, description, status, result, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(t.id, agentId, parentId, title, description, t.status, '', t.createdAt, origin ? JSON.stringify(origin) : null);
     return t;
   },
   updateTask(t: Task) {
@@ -165,6 +179,49 @@ export const store = {
     const e: FeedEvent = { id: randomUUID(), text, createdAt: Date.now() };
     db.prepare('INSERT INTO feed (id, text, created_at) VALUES (?, ?, ?)').run(e.id, text, e.createdAt);
     return e;
+  },
+
+  nodes(): NodeRecord[] {
+    return (db.prepare('SELECT * FROM nodes ORDER BY created_at').all() as Row[])
+      .map((r) => ({ id: r.id, name: r.name, token: r.token, createdAt: r.created_at }));
+  },
+  saveNode(n: NodeRecord) {
+    db.prepare(`INSERT INTO nodes (id, name, token, created_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name`).run(n.id, n.name, n.token, n.createdAt);
+  },
+  deleteNode(id: string) {
+    db.prepare('DELETE FROM nodes WHERE id = ?').run(id);
+    db.prepare('UPDATE agents SET node_id = NULL WHERE node_id = ?').run(id);
+  },
+
+  peers(): PeerRecord[] {
+    return (db.prepare('SELECT * FROM peers ORDER BY created_at').all() as Row[]).map((r) => ({
+      id: r.id, name: r.name ?? '', url: r.url ?? '', token: r.token, direction: r.direction, officeId: r.office_id ?? '',
+      createdAt: r.created_at,
+    }));
+  },
+  savePeer(p: PeerRecord) {
+    db.prepare(`INSERT INTO peers (id, name, url, token, direction, office_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, office_id = excluded.office_id`)
+      .run(p.id, p.name, p.url, p.token, p.direction, p.officeId, p.createdAt);
+  },
+  deletePeer(id: string) {
+    db.prepare('DELETE FROM peers WHERE id = ?').run(id);
+    db.prepare('DELETE FROM remote_tasks WHERE peer_id = ?').run(id);
+  },
+
+  remoteTasks(): RemoteTask[] {
+    return (db.prepare('SELECT * FROM remote_tasks ORDER BY created_at DESC LIMIT 200').all() as Row[]).map((r) => ({
+      id: r.id, peerId: r.peer_id, targetKind: r.target_kind, targetId: r.target_id, targetName: r.target_name, title: r.title,
+      description: r.description ?? '', status: r.status, result: r.result ?? '', createdAt: r.created_at,
+      finishedAt: r.finished_at ?? null,
+    }));
+  },
+  saveRemoteTask(t: RemoteTask) {
+    db.prepare(`INSERT INTO remote_tasks (id, peer_id, target_kind, target_id, target_name, title, description, status, result, created_at, finished_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET status = excluded.status, result = excluded.result, finished_at = excluded.finished_at`)
+      .run(t.id, t.peerId, t.targetKind, t.targetId, t.targetName, t.title, t.description, t.status, t.result, t.createdAt, t.finishedAt);
   },
 
   setting<T>(key: string, fallback: T): T {

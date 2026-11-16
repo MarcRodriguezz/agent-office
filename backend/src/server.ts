@@ -8,8 +8,14 @@ import { seed } from './seed.js';
 import { snapshot, startSim } from './sim.js';
 import {
   assignTask, assignTeamTask, chat, dismiss, fire, hire, initOffice, playerGo, playerSay, publishAgents,
-  playerStep, publishTeams, summon, updateAgent, type GoTarget,
+  playerStep, publishTeams, summon, updateAgent, visitorList, type GoTarget,
 } from './brain.js';
+import {
+  attachNode, createNode, dropClient, isRemote, LOCAL, nodeByToken, nodesState, refreshNode, removeNode, startTerm, termInput, termKill,
+} from './nodes.js';
+import {
+  acceptOffice, createInvite, joinOffice, leaveOffice, linkUrl, officesState, publishOffices, renameOffice, sendRemoteTask, startOffices,
+} from './offices.js';
 import { cleanCompanion, randomCompanion } from './companions.js';
 import { publishSettings, settings } from './settings.js';
 import type { Provider, ProviderKind } from './types.js';
@@ -24,6 +30,7 @@ seed();
 store.failUnfinishedTasks();
 initOffice();
 startSim();
+startOffices();
 
 const app = Fastify({ logger: { level: 'warn' } });
 await app.register(websocket);
@@ -40,11 +47,27 @@ app.get('/api/bootstrap', async () => ({
   tasks: store.tasks(),
   feed: store.feed(),
   jobs: jobsState(),
+  nodes: nodesState(),
+  offices: officesState(),
+  visitors: visitorList(),
 }));
+
+app.get('/link/health', async () => ({ ok: true, office: settings().officeName }));
+
+app.get('/internal/node', { websocket: true }, (socket) => attachNode(LOCAL, socket));
+
+app.get('/link/node', { websocket: true }, (socket, req) => {
+  const node = nodeByToken(text((req.query as any).token, 200));
+  if (!node) socket.close(4401);
+  else attachNode(node.id, socket);
+});
+
+app.get('/link/office', { websocket: true }, (socket, req) => acceptOffice(text((req.query as any).token, 200), socket));
 
 app.get('/ws', { websocket: true }, (socket) => {
   hub.add(socket);
   hub.send(socket, { type: 'state', actors: snapshot() });
+  socket.on('close', () => dropClient(socket));
   socket.on('message', (raw: Buffer) => {
     try {
       const msg = JSON.parse(raw.toString());
@@ -56,6 +79,12 @@ app.get('/ws', { websocket: true }, (socket) => {
         if (dx || dy) playerStep(dx, dy);
       } else if (msg.type === 'say') {
         playerSay(text(msg.text, 60));
+      } else if (msg.type === 'term-start') {
+        hub.send(socket, { type: 'term-started', ref: msg.ref, sid: startTerm(socket, text(msg.nodeId, 80), msg.action) });
+      } else if (msg.type === 'term-input') {
+        termInput(socket, text(msg.sid, 80), String(msg.data ?? '').slice(0, 2000));
+      } else if (msg.type === 'term-kill') {
+        termKill(socket, text(msg.sid, 80));
       }
     } catch {
       return;
@@ -69,7 +98,7 @@ app.post('/api/agents', async (req, reply) => {
   const agent = hire({
     name: text(b.name, 40), role: text(b.role, 80) || 'Generalista', personality: text(b.personality),
     instructions: text(b.instructions), providerId: b.providerId || null, model: text(b.model, 120),
-    teamId: b.teamId || null, appearance: b.appearance, companion: cleanCompanion(b.companion) ?? randomCompanion(),
+    teamId: b.teamId || null, nodeId: isRemote(b.nodeId) ? b.nodeId : null, appearance: b.appearance, companion: cleanCompanion(b.companion) ?? randomCompanion(),
   });
   if (!agent) return reply.code(409).send({ error: 'La oficina está llena: no quedan mesas libres.' });
   return agent;
@@ -82,6 +111,7 @@ app.patch('/api/agents/:id', async (req, reply) => {
   for (const key of ['name', 'role', 'personality', 'instructions', 'model']) if (typeof b[key] === 'string') patch[key] = text(b[key]);
   for (const key of ['providerId', 'teamId']) if (key in b) patch[key] = b[key] || null;
   if (b.appearance) patch.appearance = b.appearance;
+  if ('nodeId' in b) patch.nodeId = isRemote(b.nodeId) ? b.nodeId : null;
   const companion = cleanCompanion(b.companion);
   if (companion) patch.companion = companion;
   const agent = updateAgent(id, patch);
@@ -225,7 +255,7 @@ app.post('/api/providers/:id/test', async (req, reply) => {
     const answer = await complete({
       provider, system: 'Eres un asistente de pruebas de conexión.', intent: 'test', agentName: 'Prueba de conexión',
       messages: [{ role: 'user', content: 'Responde únicamente con la palabra: OK' }],
-    });
+    }, text((req.body as any)?.nodeId, 80) || null);
     return { ok: true, ms: Date.now() - started, answer: answer.slice(0, 200) };
   } catch (err) {
     return { ok: false, ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) };
@@ -239,11 +269,75 @@ app.patch('/api/settings', async (req) => {
   const companion = cleanCompanion(b.playerCompanion);
   if (companion) store.setSetting('playerCompanion', companion);
   if ('defaultProviderId' in b && store.provider(b.defaultProviderId)) store.setSetting('defaultProviderId', b.defaultProviderId);
+  if (typeof b.officeName === 'string' && text(b.officeName)) renameOffice(text(b.officeName, 60));
+  if (typeof b.linkUrl === 'string' && /^https?:\/\/\S+$/.test(text(b.linkUrl))) {
+    store.setSetting('linkUrl', text(b.linkUrl, 300).replace(/\/+$/, ''));
+    publishOffices();
+  }
   publishSettings();
   return settings();
 });
 
 app.get('/api/jobs', async () => jobsState());
+
+const nodeSetup = (token: string) => ({ officeUrl: linkUrl(), token });
+
+app.post('/api/nodes', async (req, reply) => {
+  const name = text((req.body as any).name, 40);
+  if (!name) return reply.code(400).send({ error: 'El servidor necesita un nombre.' });
+  const node = createNode(name);
+  return { id: node.id, ...nodeSetup(node.token) };
+});
+
+app.get('/api/nodes/:id/setup', async (req, reply) => {
+  const node = store.nodes().find((n) => n.id === (req.params as { id: string }).id);
+  if (!node) return reply.code(404).send({ error: 'Servidor no encontrado.' });
+  return nodeSetup(node.token);
+});
+
+app.post('/api/nodes/:id/refresh', async (req) => {
+  refreshNode((req.params as { id: string }).id);
+  return { ok: true };
+});
+
+app.delete('/api/nodes/:id', async (req) => {
+  const { id } = req.params as { id: string };
+  for (const agent of store.agents()) if (agent.nodeId === id) updateAgent(agent.id, { nodeId: null });
+  removeNode(id);
+  return { ok: true };
+});
+
+app.post('/api/offices/invite', async (req, reply) => {
+  try {
+    return { code: createInvite(text((req.body as any).url, 300)) };
+  } catch (err) {
+    return reply.code(400).send({ error: (err as Error).message });
+  }
+});
+
+app.post('/api/offices/join', async (req, reply) => {
+  try {
+    joinOffice(text((req.body as any).code, 2000));
+    return { ok: true };
+  } catch (err) {
+    return reply.code(400).send({ error: (err as Error).message });
+  }
+});
+
+app.delete('/api/offices/:id', async (req) => {
+  leaveOffice((req.params as { id: string }).id);
+  return { ok: true };
+});
+
+app.post('/api/offices/:id/tasks', async (req, reply) => {
+  const b = req.body as any;
+  if (!text(b.title)) return reply.code(400).send({ error: 'La tarea necesita un título.' });
+  try {
+    return sendRemoteTask((req.params as { id: string }).id, b.targetKind === 'team' ? 'team' : 'agent', text(b.targetId, 80), text(b.title, 200), text(b.description, 8000));
+  } catch (err) {
+    return reply.code(409).send({ error: (err as Error).message });
+  }
+});
 
 await app.listen({ host: '0.0.0.0', port: Number(process.env.PORT ?? 3000) });
 console.log('servidor de la oficina en marcha');

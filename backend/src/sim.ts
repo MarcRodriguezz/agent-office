@@ -6,7 +6,7 @@ export type Status = 'idle' | 'walking' | 'working' | 'thinking' | 'talking' | '
 
 export interface Actor {
   id: string;
-  kind: 'player' | 'agent';
+  kind: 'player' | 'agent' | 'visitor';
   x: number;
   y: number;
   path: Cell[];

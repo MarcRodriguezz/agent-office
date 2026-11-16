@@ -33,6 +33,7 @@ export interface Agent {
   providerId: string | null;
   model: string;
   teamId: string | null;
+  nodeId: string | null;
   appearance: Appearance;
   companion: Companion;
   xp: number;
@@ -68,6 +69,13 @@ export interface Task {
   result: string;
   createdAt: number;
   finishedAt: number | null;
+  origin: TaskOrigin | null;
+}
+
+export interface TaskOrigin {
+  peerId: string;
+  taskId: string;
+  office: string;
 }
 
 export interface FeedEvent {
@@ -101,8 +109,81 @@ export interface JobInfo {
   agentName: string;
   intent: Intent;
   provider: string;
+  node: string;
   status: 'waiting' | 'active' | 'completed' | 'failed';
   startedAt: number;
   ms: number | null;
   error: string;
+}
+
+export interface NodeRecord {
+  id: string;
+  name: string;
+  token: string;
+  createdAt: number;
+}
+
+export interface CliAuth {
+  installed: boolean;
+  version: string;
+  loggedIn: boolean;
+  detail: string;
+}
+
+export interface NodeInfo {
+  host: string;
+  concurrency: number;
+  claude: CliAuth;
+  codex: CliAuth;
+}
+
+export type LoginAction = 'claude-login' | 'claude-logout' | 'codex-login' | 'codex-logout';
+
+export interface PeerRecord {
+  id: string;
+  name: string;
+  url: string;
+  token: string;
+  direction: 'in' | 'out';
+  officeId: string;
+  createdAt: number;
+}
+
+export interface DirectoryAgent {
+  id: string;
+  name: string;
+  role: string;
+  teamId: string | null;
+  appearance: Appearance;
+  companion: Companion;
+  xp: number;
+}
+
+export interface Directory {
+  boss: string;
+  agents: DirectoryAgent[];
+  teams: { id: string; name: string; color: string; leadId: string | null }[];
+}
+
+export interface RemoteTask {
+  id: string;
+  peerId: string;
+  targetKind: 'agent' | 'team';
+  targetId: string;
+  targetName: string;
+  title: string;
+  description: string;
+  status: 'sent' | 'working' | 'done' | 'failed';
+  result: string;
+  createdAt: number;
+  finishedAt: number | null;
+}
+
+export interface Visitor {
+  id: string;
+  name: string;
+  office: string;
+  appearance: Appearance;
+  companion: Companion | null;
+  xp: number;
 }

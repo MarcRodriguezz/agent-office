@@ -9,7 +9,7 @@ import {
 } from './map.js';
 import { addActor, cellOf, face, removeActor, say, setStatus, walkTo, type Actor } from './sim.js';
 import { publishSettings } from './settings.js';
-import type { Agent, Intent, LlmJob, Provider, Task, Team } from './types.js';
+import type { Agent, Intent, LlmJob, Provider, Task, TaskOrigin, Team, Visitor } from './types.js';
 
 interface Runtime {
   agent: Agent;
@@ -29,7 +29,14 @@ interface PlanItem {
 }
 
 const runtimes = new Map<string, Runtime>();
+const visitors = new Map<string, Visitor>();
+let visits: Promise<unknown> = Promise.resolve();
 let player: Actor;
+
+export const events = {
+  taskFinished: (_task: Task) => {},
+  directoryChanged: () => {},
+};
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const pick = <T>(items: T[]): T => items[Math.floor(Math.random() * items.length)];
@@ -150,7 +157,7 @@ function ask(agent: Agent, intent: Intent, prompt: string, hint?: LlmJob['hint']
   return complete({
     provider: providerFor(agent), system: systemPrompt(agent), messages: [{ role: 'user', content: prompt }],
     intent, agentName: agent.name, hint,
-  });
+  }, agent.nodeId);
 }
 
 function post(rt: Runtime, text: string) {
@@ -159,8 +166,8 @@ function post(rt: Runtime, text: string) {
   say(rt.actor, text, 6500);
 }
 
-export function createTask(agentId: string, parentId: string | null, title: string, description: string): Task {
-  const task = store.addTask(agentId, parentId, title, description);
+export function createTask(agentId: string, parentId: string | null, title: string, description: string, origin: TaskOrigin | null = null): Task {
+  const task = store.addTask(agentId, parentId, title, description, origin);
   hub.broadcast({ type: 'task', task });
   return task;
 }
@@ -186,7 +193,7 @@ async function reply(rt: Runtime) {
     const raw = await complete({
       provider: providerFor(rt.agent), system: `${systemPrompt(rt.agent)}\n\n${CHAT_RULES}`, messages: history,
       intent: 'chat', agentName: rt.agent.name,
-    });
+    }, rt.agent.nodeId);
     const tag = raw.match(TASK_TAG);
     post(rt, raw.replace(TASK_TAG, '').trim() || 'Me pongo con ello.');
     award(rt, 4);
@@ -237,7 +244,9 @@ function taskPrompt(task: Task): string {
   return [
     parent
       ? `${lead?.name ?? 'Tu responsable'} te encarga esta parte del proyecto «${parent.title}».`
-      : 'Tu jefe te ha encargado este trabajo.',
+      : task.origin
+        ? `La oficina «${task.origin.office}», con la que colabora la vuestra, os ha encargado este trabajo.`
+        : 'Tu jefe te ha encargado este trabajo.',
     `Título: ${task.title}`,
     `Encargo:\n${task.description || task.title}`,
     'Hazlo ahora y devuelve directamente el resultado final, completo y listo para entregar, en Markdown. No pidas aclaraciones: si falta algún dato, asume lo razonable e indícalo.',
@@ -354,6 +363,15 @@ async function deliver(rt: Runtime, task: Task) {
     await sleep(2600);
     return;
   }
+  if (task.origin) {
+    await walkTo(actor, ENTRANCE);
+    face(actor, 'down');
+    setStatus(actor, 'talking');
+    say(actor, ok ? `📨 Enviado a ${task.origin.office}: «${task.title}»` : `📨 Aviso a ${task.origin.office}: no ha salido «${task.title}»`, 4000);
+    feed(ok ? `${agent.name} envía «${task.title}» a ${task.origin.office}` : `${agent.name} no ha podido completar el encargo de ${task.origin.office}`);
+    await sleep(2600);
+    return;
+  }
   await walkTo(actor, spotNearPlayer(actor));
   faceTowards(actor, player);
   setStatus(actor, 'visiting');
@@ -381,6 +399,7 @@ async function runTask(rt: Runtime, task: Task): Promise<Task> {
   } catch (err) {
     updateTask(task, { status: 'failed', result: err instanceof Error ? err.message : String(err), finishedAt: Date.now() });
   }
+  if (task.origin) events.taskFinished(task);
   if (runtimes.get(agent.id) === rt) await deliver(rt, task);
   return task;
 }
@@ -398,7 +417,7 @@ export function assignTask(agentId: string, title: string, description: string):
   return task;
 }
 
-export function assignTeamTask(teamId: string, title: string, description: string): Task | null {
+function leadOf(teamId: string): { team: Team; lead: Agent } | null {
   const team = store.teams().find((t) => t.id === teamId);
   if (!team) return null;
   const members = store.agents().filter((a) => a.teamId === teamId);
@@ -408,8 +427,58 @@ export function assignTeamTask(teamId: string, title: string, description: strin
     store.saveTeam({ ...team, leadId: lead.id });
     publishTeams();
   }
-  feed(`Encargo para el departamento ${team.name}: «${titleOf(title)}»`);
-  return assignTask(lead.id, title, description);
+  return { team, lead };
+}
+
+export function assignTeamTask(teamId: string, title: string, description: string): Task | null {
+  const found = leadOf(teamId);
+  if (!found) return null;
+  feed(`Encargo para el departamento ${found.team.name}: «${titleOf(title)}»`);
+  return assignTask(found.lead.id, title, description);
+}
+
+export function assignRemoteTask(origin: TaskOrigin, kind: 'agent' | 'team', targetId: string, title: string, description: string): Task | null {
+  const agentId = kind === 'team' ? leadOf(targetId)?.lead.id : targetId;
+  const rt = agentId ? runtimes.get(agentId) : undefined;
+  if (!rt) return null;
+  const task = createTask(rt.agent.id, null, titleOf(title), description, origin);
+  feed(`${origin.office} encarga a ${rt.agent.name}: «${task.title}»`);
+  void startTask(rt, task);
+  return task;
+}
+
+export const visitorList = () => [...visitors.values()];
+
+async function visit(who: Omit<Visitor, 'id'>, title: string, ok: boolean, result: string) {
+  const id = `visitor-${randomUUID()}`;
+  visitors.set(id, { ...who, id });
+  hub.broadcast({ type: 'visitors', visitors: visitorList() });
+  const actor = addActor(id, 'visitor', ENTRANCE, null);
+  try {
+    setStatus(actor, 'walking');
+    say(actor, `👋 Vengo de ${who.office}`, 3000);
+    await walkTo(actor, spotNearPlayer(actor));
+    faceTowards(actor, player);
+    setStatus(actor, 'visiting');
+    say(actor, ok ? `¡Hola! Te traigo «${title}»` : `Lo siento, no ha salido «${title}»`, 6000);
+    hub.broadcast({
+      type: 'dialog', name: `${who.name} · ${who.office}`, appearance: who.appearance, companion: who.companion, xp: who.xp,
+      text: ok ? `✅ ${title}\n\n${result}` : `❌ No hemos podido completar «${title}»: ${result}`,
+    });
+    feed(ok ? `${who.name}, de ${who.office}, entrega «${title}»` : `${who.office} no ha podido completar «${title}»`);
+    if (ok) awardPlayer(20);
+    await sleep(8000);
+    setStatus(actor, 'walking');
+    await walkTo(actor, ENTRANCE);
+  } finally {
+    removeActor(id);
+    visitors.delete(id);
+    hub.broadcast({ type: 'visitors', visitors: visitorList() });
+  }
+}
+
+export function receiveVisitor(who: Omit<Visitor, 'id'>, title: string, ok: boolean, result: string) {
+  visits = visits.then(() => visit(who, title, ok, result)).catch((err) => console.error('[visita]', err));
 }
 
 export function summon(agentId: string): boolean {
@@ -495,10 +564,12 @@ function spawn(agent: Agent, at: Cell) {
 
 export function publishAgents() {
   hub.broadcast({ type: 'agents', agents: store.agents() });
+  events.directoryChanged();
 }
 
 export function publishTeams() {
   hub.broadcast({ type: 'teams', teams: store.teams() });
+  events.directoryChanged();
 }
 
 export function hire(data: Omit<Agent, 'id' | 'desk' | 'createdAt' | 'xp'>): Agent | null {
