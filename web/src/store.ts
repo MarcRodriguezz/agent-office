@@ -1,12 +1,12 @@
 import { useSyncExternalStore } from 'react';
 import type {
-  ActorSnap, Agent, Appearance, ChatMessage, Companion, FeedEvent, JobsState, MapData, NodeState, OfficesState, Provider, Settings, Task,
+  ActorSnap, Agent, Appearance, ChatMessage, Companion, FeedEvent, HubOffice, JobsState, MapData, NodeState, OfficesState, Provider, Settings, Task,
   Team, Visitor,
 } from './types';
 
 export type Modal =
   | { kind: 'settings'; tab?: 'providers' | 'nodes' | 'profile' | 'jobs' }
-  | { kind: 'offices' }
+  | { kind: 'offices'; tab?: 'mine' | 'work' | 'outside' }
   | { kind: 'people' }
   | { kind: 'album' }
   | { kind: 'agent'; id?: string; teamId?: string }
@@ -39,6 +39,10 @@ export interface State {
   nodes: NodeState[];
   offices: OfficesState;
   visitors: Visitor[];
+  hub: HubOffice[];
+  officeId: string;
+  architect: boolean;
+  roomId: string | null;
 }
 
 export interface Dialog {
@@ -81,8 +85,12 @@ let state: State = {
   toasts: [],
   dialog: null,
   nodes: [],
-  offices: { office: { id: '', name: '', linkUrl: '' }, peers: [], remoteTasks: [] },
+  offices: { office: { id: '', name: '', linkUrl: '', linkBase: '' }, peers: [], remoteTasks: [] },
   visitors: [],
+  hub: [],
+  officeId: '',
+  architect: false,
+  roomId: null,
 };
 
 const listeners = new Set<() => void>();

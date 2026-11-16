@@ -4,6 +4,7 @@ import { bootstrap } from './net';
 import { useStore } from './store';
 import { AgentEditor } from './ui/AgentEditor';
 import { AgentPanel } from './ui/AgentPanel';
+import { Architect } from './ui/Architect';
 import { AlbumModal, DialogBox, StarterModal } from './ui/Companions';
 import { Feed, Roster, Toasts, TopBar } from './ui/Hud';
 import { OfficesModal } from './ui/OfficesModal';
@@ -16,6 +17,7 @@ export function App() {
   const modal = useStore((s) => s.modal);
   const selected = useStore((s) => s.selectedAgentId);
   const hasCompanion = useStore((s) => !!s.settings.playerCompanion);
+  const architect = useStore((s) => s.architect);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export function App() {
   if (!ready) {
     return (
       <div className="loading">
-        <span>🏢</span>
+        <span className="mark" />
         <p>Abriendo la oficina…</p>
         {error && <small>Esperando al servidor ({error})</small>}
       </div>
@@ -42,19 +44,19 @@ export function App() {
   }
 
   return (
-    <div className={`app ${selected ? 'with-panel' : ''}`}>
+    <div className={`app ${selected || architect ? 'with-panel' : ''}`}>
       <OfficeCanvas />
       <TopBar />
       <Roster />
       <Feed />
-      <div className="help"><kbd>WASD</kbd> o clic para moverte · <kbd>E</kbd> o clic en un agente para hablar · rueda para zoom</div>
+      {!architect && <div className="help"><kbd>WASD</kbd> o clic para moverte · <kbd>E</kbd> o clic en alguien para hablar · rueda para acercar</div>}
       <DialogBox />
-      <AgentPanel />
+      {architect ? <Architect /> : <AgentPanel />}
       <Toasts />
       {modal?.kind === 'settings' && <SettingsModal tab={modal.tab} />}
       {modal?.kind === 'people' && <PeopleModal />}
       {modal?.kind === 'album' && <AlbumModal />}
-      {modal?.kind === 'offices' && <OfficesModal />}
+      {modal?.kind === 'offices' && <OfficesModal tab={modal.tab} />}
       {!hasCompanion && <StarterModal />}
       {modal?.kind === 'agent' && <AgentEditor key={modal.id ?? 'new'} id={modal.id} teamId={modal.teamId} />}
       {modal?.kind === 'tasks' && <TasksModal taskId={modal.taskId} />}

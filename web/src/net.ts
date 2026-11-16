@@ -1,8 +1,10 @@
 import { applyActors, getState, setState, toast, world } from './store';
-import type { ChatMessage, GoTarget, LoginAction, Task } from './types';
+import type { ChatMessage, GoTarget, HubOffice, Layout, LoginAction, MapData, Task } from './types';
 
-export async function api<T = any>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+const OFFICE_KEY = 'agent-office:oficina';
+
+async function request<T>(url: string, method: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
     method,
     headers: body ? { 'content-type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -12,7 +14,19 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
   return data as T;
 }
 
+export const api = <T = any>(method: string, path: string, body?: unknown) =>
+  request<T>(`/o/${getState().officeId}/api${path}`, method, body);
+
+export const hubApi = <T = any>(method: string, path: string, body?: unknown) => request<T>(`/api/hub${path}`, method, body);
+
+export async function refreshHub(): Promise<HubOffice[]> {
+  const hub = await hubApi<HubOffice[]>('GET', '/offices');
+  setState({ hub });
+  return hub;
+}
+
 let socket: WebSocket | null = null;
+let generation = 0;
 let tokenSeq = 0;
 const waiting = new Map<number, (ok: boolean) => void>();
 const termStarts = new Map<number, (sid: string | null) => void>();
@@ -40,6 +54,9 @@ function handle(msg: any) {
     case 'arrived':
       waiting.get(msg.token)?.(msg.ok);
       waiting.delete(msg.token);
+      break;
+    case 'map':
+      setState({ map: msg.map });
       break;
     case 'agents':
       setState((s) => ({
@@ -107,10 +124,13 @@ function handle(msg: any) {
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  socket = new WebSocket(`${proto}://${location.host}/ws`);
-  socket.onopen = () => setState({ connected: true });
-  socket.onmessage = (e) => handle(JSON.parse(e.data));
-  socket.onclose = () => {
+  const mine = generation;
+  const ws = new WebSocket(`${proto}://${location.host}/o/${getState().officeId}/ws`);
+  socket = ws;
+  ws.onopen = () => mine === generation && setState({ connected: true });
+  ws.onmessage = (e) => mine === generation && handle(JSON.parse(e.data));
+  ws.onclose = () => {
+    if (mine !== generation) return;
     setState({ connected: false });
     waiting.forEach((resolve) => resolve(false));
     waiting.clear();
@@ -121,6 +141,14 @@ function connect() {
 }
 
 export async function bootstrap() {
+  const hub = await refreshHub();
+  const wanted = getState().officeId || localStorage.getItem(OFFICE_KEY) || '';
+  const office = hub.find((o) => o.id === wanted && o.online) ?? hub.find((o) => o.online);
+  if (!office) throw new Error('ninguna oficina responde todavía');
+  generation++;
+  socket?.close();
+  setState({ officeId: office.id });
+  localStorage.setItem(OFFICE_KEY, office.id);
   const data = await api('GET', '/bootstrap');
   applyActors(data.actors);
   setState({
@@ -130,6 +158,28 @@ export async function bootstrap() {
   });
   connect();
 }
+
+export async function switchOffice(id: string) {
+  if (id === getState().officeId) return;
+  world.actors.clear();
+  world.effects = [];
+  setState({ officeId: id, ready: false, connected: false, selectedAgentId: null, dialog: null, messages: {}, architect: false, roomId: null, modal: null });
+  await bootstrap().catch((e) => toast(e.message, false));
+}
+
+export async function saveLayout(layout: Layout | { reset: true }, quiet = false): Promise<boolean> {
+  try {
+    const map = await api<MapData>('PUT', '/layout', 'reset' in layout ? layout : { layout });
+    setState({ map });
+    return true;
+  } catch (e) {
+    if (!quiet) toast((e as Error).message, false);
+    return false;
+  }
+}
+
+export const copy = (text: string, done = 'Copiado') =>
+  navigator.clipboard.writeText(text).then(() => toast(done), () => toast('El navegador no ha dejado copiar. Selecciona el texto y cópialo a mano.', false));
 
 export function go(target: GoTarget): Promise<boolean> {
   if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.resolve(false);

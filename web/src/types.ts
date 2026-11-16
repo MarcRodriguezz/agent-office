@@ -119,14 +119,48 @@ export interface ActorSnap {
   status: Status;
 }
 
-export interface Room {
+export type RoomKind = 'boss' | 'meeting' | 'server' | 'hr' | 'work' | 'cafe' | 'office' | 'lounge';
+
+export interface RoomDef {
   id: string;
+  kind: RoomKind;
   name: string;
   x: number;
   y: number;
   w: number;
   h: number;
+  teamId: string | null;
+  agentId: string | null;
+}
+
+export interface Room extends RoomDef {
   floor: string;
+}
+
+export interface Layout {
+  w: number;
+  h: number;
+  rooms: RoomDef[];
+  doors: [number, number][];
+}
+
+export interface KindInfo {
+  label: string;
+  floor: string;
+  min: [number, number];
+  size: [number, number];
+  unique?: boolean;
+  required?: boolean;
+}
+
+export interface HubOffice {
+  id: string;
+  name: string;
+  online: boolean;
+  people: number;
+  teams: number;
+  working: number;
+  links: { peerId: string; name: string; online: boolean; office: string | null }[];
 }
 
 export interface Furniture {
@@ -147,9 +181,12 @@ export interface MapData {
   h: number;
   walls: number[];
   rooms: Room[];
+  doors: [number, number][];
   furniture: Furniture[];
   bossSeat: [number, number];
-  desks: { seat: [number, number]; visitor: [number, number] }[];
+  desks: { seat: [number, number]; visitor: [number, number]; roomId: string }[];
+  kinds: Record<RoomKind, KindInfo>;
+  limits: { minW: number; maxW: number; minH: number; maxH: number; rooms: number };
 }
 
 export type GoTarget =
@@ -198,6 +235,7 @@ export interface PeerState {
   url: string;
   online: boolean;
   pending: boolean;
+  local: boolean;
   directory: Directory | null;
 }
 
@@ -216,7 +254,7 @@ export interface RemoteTask {
 }
 
 export interface OfficesState {
-  office: { id: string; name: string; linkUrl: string };
+  office: { id: string; name: string; linkUrl: string; linkBase: string };
   peers: PeerState[];
   remoteTasks: RemoteTask[];
 }

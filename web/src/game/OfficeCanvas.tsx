@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { getState, setState, world, type RenderActor } from '../store';
 import { go, sayAsPlayer, selectAgent, step } from '../net';
 import type { Furniture, MapData } from '../types';
+import { createArchitect } from './architect';
 import { DEFAULT_APPEARANCE, drawCharacter, roundRect } from './character';
 import { drawCreature, levelOf, stageOf } from './creature';
 import { INTERACT_ICON, T, WALL_H, buildFloor, drawFurniture, drawWall, drawWindow, wallCells, wrapText } from './draw';
@@ -9,7 +10,7 @@ import { INTERACT_ICON, T, WALL_H, buildFloor, drawFurniture, drawWall, drawWind
 const PANEL_W = 420;
 const ROSTER_W = 220;
 const STATUS_ICON: Record<string, string> = { working: '💻', waiting: '⏳', talking: '💬', break: '☕', visiting: '🙋' };
-const FONT = '"Segoe UI", system-ui, sans-serif';
+const FONT = '"IBM Plex Sans", system-ui, sans-serif';
 
 interface View {
   camX: number;
@@ -48,6 +49,7 @@ export function OfficeCanvas() {
     let hoverFurniture: Furniture | null = null;
     let marker: { x: number; y: number; at: number } | null = null;
     let firstFrame = true;
+    let teamsRef: unknown = null;
 
     const toWorld = (sx: number, sy: number): [number, number] => [
       (sx - view.cx) / view.zoom + view.camX,
@@ -73,7 +75,10 @@ export function OfficeCanvas() {
       return { agent, furniture };
     };
 
+    const architect = createArchitect(canvas, (sx, sy) => toWorld(sx, sy), () => view.zoom);
+
     const onMove = (e: MouseEvent) => {
+      if (getState().architect) return;
       const rect = canvas.getBoundingClientRect();
       const [wx, wy] = toWorld(e.clientX - rect.left, e.clientY - rect.top);
       const hit = pickAt(wx, wy);
@@ -83,6 +88,7 @@ export function OfficeCanvas() {
     };
 
     const onClick = (e: MouseEvent) => {
+      if (getState().architect) return;
       const rect = canvas.getBoundingClientRect();
       const [wx, wy] = toWorld(e.clientX - rect.left, e.clientY - rect.top);
       const hit = pickAt(wx, wy);
@@ -103,7 +109,7 @@ export function OfficeCanvas() {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      view.userZoom = Math.max(0.6, Math.min(1.8, view.userZoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+      view.userZoom = Math.max(getState().architect ? 0.3 : 0.6, Math.min(1.8, view.userZoom * (e.deltaY > 0 ? 0.9 : 1.1)));
     };
 
     const keys = new Set<string>();
@@ -134,7 +140,7 @@ export function OfficeCanvas() {
       if (f) runInteraction(f);
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (typing() || getState().modal || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (typing() || getState().modal || getState().architect || e.ctrlKey || e.metaKey || e.altKey) return;
       const key = e.key.toLowerCase();
       if (DIRS[key]) {
         e.preventDefault();
@@ -149,7 +155,7 @@ export function OfficeCanvas() {
     const onKeyUp = (e: KeyboardEvent) => keys.delete(e.key.toLowerCase());
     const onBlur = () => keys.clear();
     const stepper = setInterval(() => {
-      if (typing() || getState().modal) {
+      if (typing() || getState().modal || getState().architect) {
         keys.clear();
         return;
       }
@@ -162,6 +168,9 @@ export function OfficeCanvas() {
 
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('click', onClick);
+    canvas.addEventListener('mousedown', architect.onDown);
+    window.addEventListener('mousemove', architect.onMove);
+    window.addEventListener('mouseup', architect.onUp);
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
     const drawTag = (a: RenderActor, name: string, color: string | null, selected: boolean) => {
@@ -172,7 +181,7 @@ export function OfficeCanvas() {
       const w = ctx.measureText(label).width + (color ? 22 : 14);
       const x = fx - w / 2;
       const y = fy - 78;
-      ctx.fillStyle = selected ? 'rgba(79, 140, 255, 0.95)' : 'rgba(22, 24, 32, 0.78)';
+      ctx.fillStyle = selected ? 'rgba(232, 89, 12, 0.95)' : 'rgba(22, 24, 32, 0.78)';
       roundRect(ctx, x, y, w, 17, 8.5);
       ctx.fill();
       if (color) {
@@ -215,9 +224,10 @@ export function OfficeCanvas() {
       raf = requestAnimationFrame(frame);
       const state = getState();
       if (!state.map) return;
-      if (state.map !== map) {
+      if (state.map !== map || state.teams !== teamsRef) {
         map = state.map;
-        floor = buildFloor(map);
+        teamsRef = state.teams;
+        floor = buildFloor(map, (id) => state.teams.find((t) => t.id === id)?.color);
         walls = wallCells(map);
       }
       const dt = Math.min(0.1, (now - last) / 1000);
@@ -262,7 +272,7 @@ export function OfficeCanvas() {
         }
       }
 
-      const usable = cw - left - (state.selectedAgentId && cw > 900 ? PANEL_W : 0);
+      const usable = cw - left - ((state.selectedAgentId || state.architect) && cw > 900 ? PANEL_W : 0);
       view.zoom = Math.max(0.8, Math.min(1.25, usable / (30 * T))) * view.userZoom;
       view.cx += (left + usable / 2 - view.cx) * (firstFrame ? 1 : k * 0.5);
       view.cy = ch / 2 + 20;
@@ -273,9 +283,19 @@ export function OfficeCanvas() {
       const halfH = ch / 2 / view.zoom;
       const clamp = (v: number, half: number, size: number) =>
         half * 2 >= size + 160 ? size / 2 : Math.max(half - 80, Math.min(size - half + 80, v));
-      const tx = clamp(player ? (player.rx + 0.5) * T : mapW / 2, halfW, mapW);
-      const ty = clamp(player ? (player.ry + 0.5) * T : mapH / 2, halfH, mapH);
-      const ck = firstFrame ? 1 : 1 - Math.exp(-dt * 5);
+      if (!state.architect) {
+        if (architect.cam.at) view.userZoom = 1;
+        architect.cam.at = null;
+      } else if (!architect.cam.at) {
+        architect.cam.at = [mapW / 2, mapH / 2];
+        const base = Math.max(0.8, Math.min(1.25, usable / (30 * T)));
+        view.userZoom = Math.max(0.3, Math.min(1, Math.min(usable / (mapW + 120), (ch - 40) / (mapH + 160)) / base));
+      }
+      const focus = architect.cam.at ?? (player ? [(player.rx + 0.5) * T, (player.ry + 0.5) * T] : [mapW / 2, mapH / 2]);
+      const tx = state.architect ? Math.max(0, Math.min(mapW, focus[0])) : clamp(focus[0], halfW, mapW);
+      const ty = state.architect ? Math.max(0, Math.min(mapH, focus[1])) : clamp(focus[1], halfH, mapH);
+      if (architect.cam.at) architect.cam.at = [tx, ty];
+      const ck = firstFrame || state.architect ? 1 : 1 - Math.exp(-dt * 5);
       view.camX += (tx - view.camX) * ck;
       view.camY += (ty - view.camY) * ck;
       firstFrame = false;
@@ -294,7 +314,7 @@ export function OfficeCanvas() {
         const age = (now - marker.at) / 600;
         if (age > 1) marker = null;
         else {
-          ctx.strokeStyle = `rgba(79, 140, 255, ${1 - age})`;
+          ctx.strokeStyle = `rgba(232, 89, 12, ${1 - age})`;
           ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.ellipse((marker.x + 0.5) * T, (marker.y + 0.5) * T + 12, 8 + age * 14, 4 + age * 7, 0, 0, Math.PI * 2);
@@ -311,7 +331,7 @@ export function OfficeCanvas() {
         const mine = a.kind === 'player';
         if (!mine && a.id !== state.selectedAgentId && a.id !== hoverAgent) continue;
         const [fx, fy] = feet(a);
-        ctx.strokeStyle = mine ? 'rgba(255, 215, 106, 0.9)' : 'rgba(79, 140, 255, 0.95)';
+        ctx.strokeStyle = mine ? 'rgba(255, 215, 106, 0.9)' : 'rgba(232, 89, 12, 0.95)';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.ellipse(fx, fy, 17 + Math.sin(time * 4) * 1.2, 7.5, 0, 0, Math.PI * 2);
@@ -368,7 +388,7 @@ export function OfficeCanvas() {
         const cx = (f.x + f.w / 2) * T + (f.type === 'bossdesk' ? 118 : 0);
         const top = f.y * T - 62 + Math.sin(time * 2.4 + f.x) * 3;
         const hovered = hoverFurniture === f;
-        ctx.fillStyle = hovered ? 'rgba(79, 140, 255, 0.95)' : 'rgba(22, 24, 32, 0.8)';
+        ctx.fillStyle = hovered ? 'rgba(232, 89, 12, 0.95)' : 'rgba(22, 24, 32, 0.8)';
         ctx.font = `600 12px ${FONT}`;
         const text = hovered ? `${INTERACT_ICON[f.interact]} ${f.label ?? ''}` : INTERACT_ICON[f.interact];
         const w = ctx.measureText(text).width + 16;
@@ -393,6 +413,8 @@ export function OfficeCanvas() {
         }
       }
       for (const a of sorted) if (a.bubble) drawBubble(a);
+
+      if (state.architect) architect.draw(ctx, map, FONT);
 
       world.effects = world.effects.filter((fx) => now - fx.at < 3200);
       for (const fx of world.effects) {
@@ -448,6 +470,9 @@ export function OfficeCanvas() {
       window.removeEventListener('blur', onBlur);
       canvas.removeEventListener('mousemove', onMove);
       canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('mousedown', architect.onDown);
+      window.removeEventListener('mousemove', architect.onMove);
+      window.removeEventListener('mouseup', architect.onUp);
       canvas.removeEventListener('wheel', onWheel);
     };
   }, []);

@@ -30,13 +30,13 @@ function chair(ctx: Ctx, x: number, y: number, color: string) {
   ctx.fill();
 }
 
-export function buildFloor(map: MapData): HTMLCanvasElement {
+export function buildFloor(map: MapData, teamColor: (id: string | null) => string | undefined): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = map.w * T;
   canvas.height = map.h * T;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#bdb6aa';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) if (map.walls[y * map.w + x] !== 2) ctx.fillRect(x * T, y * T, T, T);
 
   for (const room of map.rooms) {
     const [a, b] = FLOORS[room.floor] ?? FLOORS.office;
@@ -68,10 +68,17 @@ export function buildFloor(map: MapData): HTMLCanvasElement {
         ctx.fillRect(x0 + T, y0 + h - T * 1.5, w - T * 2, 3);
       }
     }
-    ctx.font = '700 12px "Segoe UI", system-ui, sans-serif';
+    const band = teamColor(room.teamId);
+    if (band) {
+      ctx.fillStyle = band;
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(x0, y0 + h - 6, w, 6);
+      ctx.globalAlpha = 1;
+    }
+    ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
     ctx.fillStyle = room.floor === 'tech' ? 'rgba(255, 255, 255, 0.32)' : 'rgba(40, 30, 20, 0.3)';
     ctx.save();
-    ctx.translate(x0 + 12, y0 + h - 12);
+    ctx.translate(x0 + 12, y0 + h - (band ? 16 : 12));
     [...room.name].forEach((ch, i) => ctx.fillText(ch, i * 9.5, 0));
     ctx.restore();
   }
@@ -110,7 +117,8 @@ export function wallCells(map: MapData) {
     for (let x = 0; x < map.w; x++) {
       if (!isWall(map, x, y)) continue;
       const front = y < map.h - 1 && !isWall(map, x, y + 1);
-      const window = y === 0 && front && x % 4 === 1 && !isWall(map, x + 1, 1);
+      const outside = y === 0 || map.walls[(y - 1) * map.w + x] === 2;
+      const window = outside && front && x % 4 === 1 && isWall(map, x + 1, y) && !isWall(map, x + 1, y + 1);
       cells.push({ x, y, front, window });
     }
   }

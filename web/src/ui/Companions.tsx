@@ -216,7 +216,7 @@ export function DialogBox() {
       <div className="dialogactions">
         {agent
           ? <button className="primary" onClick={() => void selectAgent(agent.id, false)}>{full.length > 300 ? 'Leer todo' : 'Responder'}</button>
-          : <button className="primary" onClick={() => setState({ dialog: null, modal: { kind: 'offices' } })}>Ver encargo</button>}
+          : <button className="primary" onClick={() => setState({ dialog: null, modal: { kind: 'offices', tab: 'work' } })}>Ver encargo</button>}
         <button onClick={() => setState({ dialog: null })}>Cerrar</button>
       </div>
     </div>

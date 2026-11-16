@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { levelOf } from '../game/creature';
-import { api } from '../net';
+import { api, copy, hubApi, refreshHub, switchOffice } from '../net';
 import { setState, toast, useStore } from '../store';
-import type { PeerState, RemoteTask } from '../types';
+import type { HubOffice, PeerState, RemoteTask } from '../types';
 import { Avatar, Markdown, Modal, timeAgo } from './common';
 
 const STATUS: Record<RemoteTask['status'], { label: string; cls: string }> = {
@@ -12,11 +12,120 @@ const STATUS: Record<RemoteTask['status'], { label: string; cls: string }> = {
   failed: { label: 'Fallido', cls: 'red' },
 };
 
-function Connect() {
-  const linkUrl = useStore((s) => s.offices.office.linkUrl);
-  const [url, setUrl] = useState(linkUrl);
+function useHub() {
+  const hub = useStore((s) => s.hub);
+  useEffect(() => {
+    void refreshHub().catch(() => null);
+    const timer = setInterval(() => void refreshHub().catch(() => null), 2500);
+    return () => clearInterval(timer);
+  }, []);
+  return hub;
+}
+
+const run = async (work: () => Promise<unknown>, done?: string) => {
+  try {
+    await work();
+    await refreshHub();
+    if (done) toast(done);
+    return true;
+  } catch (e) {
+    toast((e as Error).message, false);
+    return false;
+  }
+};
+
+function OfficeCard({ office, all }: { office: HubOffice; all: HubOffice[] }) {
+  const current = useStore((s) => s.officeId);
+  const [name, setName] = useState(office.name);
+  useEffect(() => setName(office.name), [office.name]);
+  const here = office.id === current;
+  const others = all.filter((o) => o.id !== office.id);
+  const outside = office.links.filter((l) => !l.office);
+
+  const rename = () => {
+    if (!name.trim() || name.trim() === office.name) return;
+    void run(() => fetch(`/o/${office.id}/api/settings`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ officeName: name.trim() }),
+    }));
+  };
+  const remove = () => {
+    if (!confirm(`¿Eliminar «${office.name}»? Se borran su gente, sus tareas y sus conversaciones. No se puede deshacer.`)) return;
+    void run(() => hubApi('DELETE', `/offices/${office.id}`), 'Oficina eliminada');
+  };
+
+  return (
+    <section className={`officecard ${here ? 'here' : ''}`}>
+      <header>
+        <input className="teamname" value={name} onChange={(e) => setName(e.target.value)} onBlur={rename}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} aria-label="Nombre de la oficina" />
+        {here
+          ? <span className="pill green">Estás aquí</span>
+          : <button className="primary" disabled={!office.online} onClick={() => void switchOffice(office.id)}>Entrar</button>}
+      </header>
+      <p className="facts">
+        {office.online
+          ? `${office.people} personas · ${office.teams} departamentos · ${office.working ? `${office.working} encargos en curso` : 'sin encargos en curso'}`
+          : 'Arrancando…'}
+      </p>
+      {others.length > 0 && (
+        <div className="linkrows">
+          {others.map((other) => {
+            const link = office.links.find((l) => l.office === other.id);
+            return (
+              <div key={other.id} className="linkrow">
+                <i className={link ? (link.online ? 'on' : 'wait') : ''} />
+                <span>{other.name}</span>
+                <small>{link ? (link.online ? 'enlazadas' : 'reconectando') : 'sin enlace'}</small>
+                {link
+                  ? <button onClick={() => void run(() => hubApi('DELETE', `/links?a=${office.id}&b=${other.id}`))}>Desenlazar</button>
+                  : <button onClick={() => void run(() => hubApi('POST', '/links', { a: office.id, b: other.id }), `${office.name} y ${other.name} ya trabajan juntas`)}>Enlazar</button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {outside.length > 0 && <p className="facts">De fuera: {outside.map((l) => `${l.name}${l.online ? '' : ' (sin conexión)'}`).join(', ')}</p>}
+      {all.length > 1 && !here && <button className="danger ghost small" onClick={remove}>Eliminar esta oficina</button>}
+    </section>
+  );
+}
+
+function Mine() {
+  const hub = useHub();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const create = async () => {
+    setBusy(true);
+    if (await run(() => hubApi('POST', '/offices', { name }), `«${name}» está lista`)) setName('');
+    setBusy(false);
+  };
+  return (
+    <div className="minepanel">
+      <p className="hint">
+        Todas tus oficinas viven en esta misma dirección. Entra en cualquiera desde aquí o desde el nombre de la oficina, arriba a la izquierda.
+        Dos oficinas enlazadas se ven la plantilla y se encargan trabajo.
+      </p>
+      <div className="officegrid">
+        {hub.map((o) => <OfficeCard key={o.id} office={o} all={hub} />)}
+        <section className="officecard new">
+          <h4>Abrir otra oficina</h4>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre: Oficina Norte, Estudio…" maxLength={60}
+            onKeyDown={(e) => e.key === 'Enter' && name.trim() && !busy && void create()} />
+          <button className="primary" disabled={!name.trim() || busy} onClick={() => void create()}>{busy ? 'Abriendo…' : 'Abrir oficina'}</button>
+          <p className="facts">Llega con su propia plantilla, su plano y sus ajustes.</p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function Outside() {
+  const office = useStore((s) => s.offices.office);
+  const peers = useStore((s) => s.offices.peers);
+  const [url, setUrl] = useState(office.linkBase);
   const [invite, setInvite] = useState('');
   const [code, setCode] = useState('');
+  const pending = peers.filter((p) => p.pending);
   const create = async () => {
     const r = await api('POST', '/offices/invite', { url }).catch((e) => toast(e.message, false));
     if (r) setInvite(r.code);
@@ -28,30 +137,39 @@ function Connect() {
       toast('Conectando con la otra oficina…');
     }
   };
+  const paste = () => navigator.clipboard.readText().then(setCode, () => toast('Pega el código con Ctrl+V.', false));
   return (
     <div className="connect">
       <p className="hint">
-        Cada oficina es una instalación independiente de Agent Office (en este equipo o en otro). Al conectarlas ves a su gente,
-        puedes encargarles trabajo y recibir sus entregas en persona. Una oficina invita y la otra se une con el código.
+        Para enlazar «{office.name}» con una oficina que vive en otro equipo. Una de las dos crea una invitación y la otra la pega.
+        Las oficinas de esta misma instalación se enlazan con un botón en «Mis oficinas».
       </p>
       <section>
-        <h4>Invitar a otra oficina</h4>
-        <label>Dirección de enlace de esta oficina
+        <h4>Invitar a una oficina de fuera</h4>
+        <label>Dirección por la que llegan hasta este equipo
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://mi-equipo:8090" />
         </label>
-        <p className="hint">Es la dirección por la que la otra oficina llega a esta (puerto de enlace, 8090 por defecto). Para dos oficinas en el mismo equipo con Docker vale <code>http://host.docker.internal:8090</code>.</p>
-        <button className="primary" onClick={() => void create()}>Generar código de invitación</button>
+        <button className="primary" onClick={() => void create()}>Crear invitación</button>
         {invite && (
-          <>
-            <textarea readOnly rows={3} value={invite} onFocus={(e) => e.target.select()} />
-            <button onClick={() => void navigator.clipboard.writeText(invite).then(() => toast('Código copiado'))}>Copiar código</button>
-          </>
+          <div className="copybox">
+            <code>{invite}</code>
+            <button className="primary" onClick={() => void copy(invite, 'Invitación copiada')}>Copiar invitación</button>
+          </div>
         )}
+        {pending.map((p) => (
+          <div key={p.id} className="linkrow">
+            <i className="wait" /><span>Invitación sin usar</span><small>esperando a la otra oficina</small>
+            <button onClick={() => void api('DELETE', `/offices/${p.id}`)}>Anular</button>
+          </div>
+        ))}
       </section>
       <section>
-        <h4>Unirme con un código</h4>
-        <textarea rows={3} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Pega aquí el código que te ha pasado la otra oficina" />
-        <button className="primary" disabled={!code.trim()} onClick={() => void join()}>Conectar</button>
+        <h4>Tengo una invitación</h4>
+        <div className="row">
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Pega aquí la invitación" />
+          <button onClick={() => void paste()}>Pegar</button>
+          <button className="primary" disabled={!code.trim()} onClick={() => void join()}>Conectar</button>
+        </div>
       </section>
     </div>
   );
@@ -76,24 +194,20 @@ function Office({ peer }: { peer: PeerState }) {
       setTarget(null);
     }
   };
-  const leave = async () => {
-    if (!confirm(`¿Cerrar la conexión con ${peer.name || 'esta oficina'}?`)) return;
-    await api('DELETE', `/offices/${peer.id}`).catch((e) => toast(e.message, false));
-  };
 
   const groups = dir ? [
     ...dir.teams.map((t) => ({ ...t, members: dir.agents.filter((a) => a.teamId === t.id) })),
-    { id: '', name: 'Sin departamento', color: '#6b7385', leadId: null, members: dir.agents.filter((a) => !dir.teams.some((t) => t.id === a.teamId)) },
+    { id: '', name: 'Sin departamento', color: '#8a8478', leadId: null, members: dir.agents.filter((a) => !dir.teams.some((t) => t.id === a.teamId)) },
   ].filter((g) => g.members.length) : [];
 
   return (
     <div className="officeview">
       <header>
         <div>
-          <strong>{peer.name || 'Invitación pendiente'}</strong>
-          <small>{peer.pending ? 'Esperando a que la otra oficina use el código' : peer.online ? `En línea${dir ? ` · dirige ${dir.boss}` : ''}` : 'Sin conexión: se reintenta sola'}</small>
+          <strong>{peer.name}</strong>
+          <small>{peer.online ? `En línea${dir ? ` · la dirige ${dir.boss}` : ''}` : 'Sin conexión: se reintenta sola'}</small>
         </div>
-        <button className="danger" onClick={() => void leave()}>{peer.pending ? 'Anular invitación' : 'Desconectar'}</button>
+        {!peer.local && <button className="danger" onClick={() => confirm(`¿Cerrar la conexión con ${peer.name}?`) && void api('DELETE', `/offices/${peer.id}`)}>Desconectar</button>}
       </header>
       {groups.map((g) => (
         <section key={g.id} className="teamcard" style={{ borderLeftColor: g.color }}>
@@ -114,17 +228,17 @@ function Office({ peer }: { peer: PeerState }) {
         </section>
       ))}
       {target && (
-        <div className="newtask">
+        <div className="newtask boxed">
           <strong>Encargo para {target.name}</strong>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título del encargo" autoFocus />
-          <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalles: qué necesitas, formato de la entrega…" />
-          <div className="row">
+          <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Qué necesitas y en qué formato lo quieres" />
+          <div className="row end">
             <button onClick={() => setTarget(null)}>Cancelar</button>
             <button className="primary" disabled={!title.trim() || !peer.online} onClick={() => void send()}>Enviar encargo</button>
           </div>
         </div>
       )}
-      {peer.online && !target && dir && <p className="hint">Elige a una persona o a un departamento para enviarle un encargo. Cuando terminen, alguien de esa oficina vendrá a entregártelo.</p>}
+      {peer.online && !target && dir && <p className="hint">Elige a una persona o a un departamento. Cuando terminen, alguien de esa oficina vendrá a entregártelo.</p>}
       {mine.length > 0 && <h4>Encargos enviados</h4>}
       {mine.map((t) => (
         <div key={t.id} className={`task ${openId === t.id ? 'open' : ''}`}>
@@ -145,27 +259,51 @@ function Office({ peer }: { peer: PeerState }) {
   );
 }
 
-export function OfficesModal() {
-  const offices = useStore((s) => s.offices);
-  const [current, setCurrent] = useState<string | null>(offices.peers[0]?.id ?? null);
-  const peer = offices.peers.find((p) => p.id === current);
-  return (
-    <Modal title={`Centralita · ${offices.office.name}`} onClose={() => setState({ modal: null })} wide>
-      <div className="providers">
-        <div className="list">
-          <h4>Oficinas conectadas</h4>
-          {offices.peers.map((p) => (
-            <button key={p.id} className={current === p.id ? 'on' : ''} onClick={() => setCurrent(p.id)}>
-              <strong>{p.name || 'Invitación pendiente'}</strong>
-              <small>{p.pending ? 'sin usar todavía' : p.online ? `${p.directory?.agents.length ?? 0} personas` : 'sin conexión'}</small>
-              {p.online && <em>en línea</em>}
-            </button>
-          ))}
-          {!offices.peers.length && <small className="empty">Todavía no hay ninguna.</small>}
-          <button className="add" onClick={() => setCurrent(null)}>＋ Conectar con otra oficina</button>
-        </div>
-        <div className="detail">{peer ? <Office key={peer.id} peer={peer} /> : <Connect />}</div>
+function Work({ goMine }: { goMine: () => void }) {
+  const peers = useStore((s) => s.offices.peers);
+  const linked = peers.filter((p) => !p.pending);
+  const [current, setCurrent] = useState<string | null>(linked[0]?.id ?? null);
+  const peer = linked.find((p) => p.id === current) ?? linked[0];
+  if (!linked.length) {
+    return (
+      <div className="emptystate">
+        <strong>Esta oficina todavía no está enlazada con ninguna.</strong>
+        <p>Enlázala con otra de las tuyas y podrás encargar trabajo a su gente desde aquí.</p>
+        <button className="primary" onClick={goMine}>Ir a mis oficinas</button>
       </div>
+    );
+  }
+  return (
+    <div className="providers">
+      <div className="list">
+        <h4>Enlazadas con esta</h4>
+        {linked.map((p) => (
+          <button key={p.id} className={peer?.id === p.id ? 'on' : ''} onClick={() => setCurrent(p.id)}>
+            <strong>{p.name}</strong>
+            <small>{p.online ? `${p.directory?.agents.length ?? 0} personas` : 'sin conexión'}{p.local ? '' : ' · de fuera'}</small>
+          </button>
+        ))}
+      </div>
+      <div className="detail">{peer && <Office key={peer.id} peer={peer} />}</div>
+    </div>
+  );
+}
+
+export function OfficesModal({ tab: initial }: { tab?: 'mine' | 'work' | 'outside' }) {
+  const name = useStore((s) => s.settings.officeName);
+  const [tab, setTab] = useState(initial ?? 'mine');
+  return (
+    <Modal title="Oficinas" onClose={() => setState({ modal: null })} wide>
+      <nav className="tabs">
+        <button className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>Mis oficinas</button>
+        <button className={tab === 'work' ? 'on' : ''} onClick={() => setTab('work')}>Encargar a otra oficina</button>
+        <button className={tab === 'outside' ? 'on' : ''} onClick={() => setTab('outside')}>Oficinas de fuera</button>
+        <span />
+        <small>Estás en {name}</small>
+      </nav>
+      {tab === 'mine' && <Mine />}
+      {tab === 'work' && <Work goMine={() => setTab('mine')} />}
+      {tab === 'outside' && <Outside />}
     </Modal>
   );
 }
