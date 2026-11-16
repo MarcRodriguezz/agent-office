@@ -30,7 +30,7 @@ function TeamCard({ team }: { team: Team }) {
   };
 
   return (
-    <section className="teamcard" style={{ borderColor: team.color }}>
+    <section className="teamcard" style={{ borderLeftColor: team.color }}>
       <div className="teamhead">
         <div className="swatches small">
           {COLORS.map((c) => (

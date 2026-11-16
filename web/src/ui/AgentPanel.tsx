@@ -60,9 +60,9 @@ export function AgentPanel() {
         <button className="icon" onClick={() => setState({ selectedAgentId: null })} aria-label="Cerrar">✕</button>
       </header>
       <div className="quick">
-        <button onClick={() => void api('POST', `/agents/${agent.id}/summon`)}>📣 Que venga a verme</button>
-        <button onClick={() => void api('POST', `/agents/${agent.id}/dismiss`)}>↩ A su mesa</button>
-        <button onClick={() => setState({ modal: { kind: 'agent', id: agent.id } })}>✏️ Editar</button>
+        <button onClick={() => void api('POST', `/agents/${agent.id}/summon`)}>Que venga</button>
+        <button onClick={() => void api('POST', `/agents/${agent.id}/dismiss`)}>A su mesa</button>
+        <button onClick={() => setState({ modal: { kind: 'agent', id: agent.id } })}>Editar</button>
       </div>
       <div className="compi">
         <CreatureView species={agent.companion.species} stage={stageOf(levelOf(agent.xp))} size={46} />
@@ -71,7 +71,7 @@ export function AgentPanel() {
           <XpBar xp={agent.xp} color={speciesOf(agent.companion.species).color} />
         </div>
       </div>
-      <div className="brainline">🧠 {provider ? `${provider.name}${agent.model || provider.model ? ` · ${agent.model || provider.model}` : ''}` : 'Sin proveedor'}</div>
+      <div className="brainline">Piensa con {provider ? `${provider.name}${agent.model || provider.model ? ` · ${agent.model || provider.model}` : ''}` : 'Sin proveedor'}</div>
       <nav className="tabs">
         <button className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>Conversación</button>
         <button className={tab === 'tasks' ? 'on' : ''} onClick={() => setTab('tasks')}>Tareas ({mine.length})</button>

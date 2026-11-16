@@ -22,12 +22,12 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   }, [onClose]);
   return (
     <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? 'wide' : ''}`}>
+      <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}>
         <header>
           <h2>{title}</h2>
           <button className="icon" onClick={onClose} aria-label="Cerrar">✕</button>
         </header>
-        <div className="modal-body">{children}</div>
+        <div className="modal-body" onWheel={(e) => e.stopPropagation()}>{children}</div>
       </div>
     </div>
   );

@@ -49,7 +49,7 @@ export function AppearanceEditor({ value, onChange }: { value: Appearance; onCha
       <div className="preview">
         <Body appearance={value} />
         <Avatar appearance={value} size={72} />
-        <button type="button" onClick={() => onChange(randomAppearance())}>🎲 Aleatorio</button>
+        <button type="button" onClick={() => onChange(randomAppearance())}>Aleatorio</button>
       </div>
       <div className="options">
         <label>Piel</label>{swatches('skin', SKINS)}
@@ -140,7 +140,7 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
             </label>
             <label>Dónde se ejecuta
               <select value={form.nodeId} onChange={(e) => set({ nodeId: e.target.value })}>
-                {nodes.map((n) => <option key={n.id} value={n.local ? '' : n.id}>{n.local ? 'En esta oficina' : `🛰 ${n.name}${n.online ? '' : ' (desconectado)'}`}</option>)}
+                {nodes.map((n) => <option key={n.id} value={n.local ? '' : n.id}>{n.local ? 'En esta oficina' : `${n.name}${n.online ? '' : ' (desconectado)'}`}</option>)}
               </select>
             </label>
           </div>
