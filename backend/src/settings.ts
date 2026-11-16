@@ -10,6 +10,7 @@ export function settings() {
     playerXp: store.setting('playerXp', 0),
     defaultProviderId: store.setting<string | null>('defaultProviderId', null),
     officeName: store.setting('officeName', 'Mi oficina'),
+    managerId: store.setting<string | null>('managerId', null),
   };
 }
 

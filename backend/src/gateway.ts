@@ -37,10 +37,10 @@ save();
 
 const children = new Map<number, ChildProcess>();
 
-function start(entry: Entry) {
+function start(entry: Entry, template = '') {
   const child = spawn(process.execPath, [serverEntry], {
     stdio: 'inherit',
-    env: { ...process.env, PORT: String(entry.port), DB_PATH: entry.db, LINK_PREFIX: `/o/${entry.port}`, OFFICE_SLOT: String(entry.port - FIRST_PORT) },
+    env: { ...process.env, PORT: String(entry.port), DB_PATH: entry.db, LINK_PREFIX: `/o/${entry.port}`, OFFICE_TEMPLATE: template },
   });
   children.set(entry.port, child);
   child.on('exit', (code) => {
@@ -115,7 +115,7 @@ app.post('/api/hub/offices', async (req, reply) => {
   const entry: Entry = { port, db: join(dataDir, 'offices', `${port}.db`), createdAt: Date.now() };
   registry.push(entry);
   save();
-  start(entry);
+  start(entry, text((req.body as any)?.template, 40) || 'product');
   if (!(await ready(port))) return reply.code(500).send({ error: 'La oficina nueva no ha arrancado a tiempo.' });
   await call(port, 'PATCH', '/api/settings', { officeName: name });
   return { id: String(port) };

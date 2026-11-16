@@ -5,6 +5,7 @@ import { hub } from './hub.js';
 import { complete } from './llm.js';
 import { deskSeat, deskVisitor, map, mapData, nearestWalkable, setLayout, walkable, type Cell, type Desk } from './map.js';
 import { addActor, cellOf, face, remap, removeActor, say, setStatus, walkTo, type Actor } from './sim.js';
+import { staff, templateOf } from './seed.js';
 import { publishSettings } from './settings.js';
 import type { Agent, Intent, LlmJob, Provider, Task, TaskOrigin, Team, Visitor } from './types.js';
 
@@ -121,7 +122,10 @@ function teamOf(agent: Agent): Team | undefined {
   return store.teams().find((t) => t.id === agent.teamId);
 }
 
+const managerId = () => store.setting<string | null>('managerId', null);
+
 function reportsOf(agent: Agent): Agent[] {
+  if (agent.id === managerId()) return store.agents().filter((a) => a.id !== agent.id && runtimes.has(a.id));
   const led = store.teams().filter((t) => t.leadId === agent.id).map((t) => t.id);
   return store.agents().filter((a) => a.id !== agent.id && a.teamId && led.includes(a.teamId) && runtimes.has(a.id));
 }
@@ -130,13 +134,15 @@ function systemPrompt(agent: Agent): string {
   const boss = store.setting('playerName', 'Jefe');
   const team = teamOf(agent);
   const teams = store.teams();
+  const manager = managerId();
   const mates = store.agents().filter((a) => a.id !== agent.id).map((a) => {
     const t = teams.find((x) => x.id === a.teamId);
-    return `- ${a.name}: ${a.role}${t ? ` (${t.name}${t.leadId === a.id ? ', responsable' : ''})` : ''}`;
+    return `- ${a.name}: ${a.role}${t ? ` (${t.name}${t.leadId === a.id ? ', responsable' : ''})` : ''}${a.id === manager ? ' (dirige la oficina)' : ''}`;
   });
   return [
     `Eres ${agent.name}, ${agent.role} en una oficina. Tu jefe directo se llama ${boss} y es quien habla contigo.`,
     agent.personality ? `Personalidad: ${agent.personality}` : '',
+    agent.id === manager ? 'Eres manager de toda la oficina: coordinas a todas las personas y departamentos, y respondes ante tu jefe.' : '',
     team ? `Perteneces al departamento «${team.name}»${team.leadId === agent.id ? ' y eres su responsable' : ''}.${team.mission ? ` Misión del departamento: ${team.mission}` : ''}` : '',
     mates.length ? `Compañeros de oficina:\n${mates.join('\n')}` : '',
     agent.instructions ? `Instrucciones adicionales:\n${agent.instructions}` : '',
@@ -601,6 +607,10 @@ export function fire(id: string): boolean {
   interrupt(rt);
   removeActor(id);
   store.deleteAgent(id);
+  if (managerId() === id) {
+    store.setSetting('managerId', null);
+    publishSettings();
+  }
   feed(`${rt.agent.name} deja la oficina`);
   publishAgents();
   publishTeams();
@@ -659,6 +669,32 @@ export function applyLayout(input: unknown) {
   reseat();
   hub.broadcast({ type: 'map', map: mapData() });
   publishAgents();
+}
+
+export function restaff(templateId: string) {
+  const template = templateOf(templateId);
+  if (!template) throw new Error('Esa plantilla de equipo no existe.');
+  if (template.people.length > map.desks.length) {
+    throw new Error(`La plantilla trae ${template.people.length} personas y el plano tiene ${map.desks.length} mesas: amplíalo en el modo arquitecto.`);
+  }
+  for (const [id, rt] of [...runtimes]) {
+    runtimes.delete(id);
+    interrupt(rt);
+    removeActor(id);
+    store.deleteAgent(id);
+  }
+  for (const team of store.teams()) store.deleteTeam(team.id);
+  const agents = staff(template.id);
+  const plan = seats(agents);
+  for (const agent of agents) {
+    agent.desk = plan.get(agent.id) ?? agent.desk;
+    store.saveAgent(agent);
+    spawn(agent, map.entrance);
+  }
+  feed(`Se incorpora la plantilla «${template.name}»`);
+  publishAgents();
+  publishTeams();
+  publishSettings();
 }
 
 export type GoTarget =
