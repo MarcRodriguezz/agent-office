@@ -153,12 +153,48 @@ Registro de las decisiones tomadas, con su motivo y lo que se descartó. Decisio
 
 **Descartado:** varias oficinas dentro de un mismo servidor y base de datos (acopla datos y claves de equipos distintos) y un directorio central de oficinas.
 
+## 16. Varias oficinas en la misma dirección, un proceso por oficina
+
+**Decisión:** una instalación aloja varias oficinas. Una centralita (`gateway.ts`) arranca un proceso `server.js` por oficina, cada uno con su puerto interno y su base de datos, y nginx encamina `/o/<puerto>/…` al que toca. La interfaz elige oficina con un selector y las gestiona desde un panel.
+
+**Motivo:** gestionar varias oficinas no puede exigir levantar otro despliegue en otro puerto. Un proceso por oficina mantiene la decisión 15 (oficinas autónomas, datos y claves separados) sin reescribir el servidor para que sea multiinquilino: todo el estado en memoria (simulación, runtimes, enlaces) sigue siendo de una sola oficina.
+
+**Detalles:**
+- Enlazar dos oficinas locales es el mismo protocolo que con una de fuera; solo cambia quién reparte el token.
+- El worker es común: una sesión de Claude Code o Codex vale para todas las oficinas de la instalación.
+- La dirección de enlace de cada oficina lleva su prefijo (`…:8090/o/3101`). `/link/` sin prefijo sigue llegando a la primera oficina para no romper los servidores remotos ya desplegados.
+
+**Descartado:** un servidor multiinquilino con una base de datos compartida (reescritura amplia y acopla datos) y un contenedor por oficina creado desde la interfaz (obliga a dar acceso al socket de Docker).
+
+## 17. El plano es un dato y los muebles se derivan
+
+**Decisión:** la oficina se describe con salas rectangulares y puertas. Muros, muebles, mesas y puntos de interés se calculan a partir de ahí. El modo arquitecto edita solo salas y puertas, y cada cambio lo valida y lo aplica el servidor.
+
+**Motivo:** editar mueble a mueble es lento y permite dejar la oficina rota. Con salas tipadas, quien edita piensa en «un despacho» o «una zona para Marketing» y el resultado siempre es transitable.
+
+**Detalles:**
+- El servidor rechaza planos con salas solapadas, inaccesibles o sin mesas suficientes, y abre puertas por su cuenta cuando una sala queda sin acceso.
+- Las mesas se reparten por pertenencia: despacho propio, zona del departamento, mesas libres. Cambiar de departamento a alguien lo cambia de sitio.
+- Los cambios se aplican en vivo: los personajes recalculan su camino y van a su nueva mesa.
+
+**Descartado:** un editor libre de muebles y un borrador en el cliente que se guarda al final (obliga a duplicar la validación en el navegador).
+
+## 18. Interfaz de papel y tinta
+
+**Decisión:** la interfaz usa fondo claro, bordes de tinta, esquinas rectas, una sola tipografía con su monoespaciada (IBM Plex) y un único color de acento. Sin emojis como iconos, sin vidrio esmerilado ni degradados. Los botones responden con un desplazamiento y una sombra dura.
+
+**Motivo:** el aspecto anterior (paneles oscuros translúcidos, azul, todo redondeado y con emojis) se leía como una plantilla genérica. La oficina dibujada es lo vistoso; la interfaz debe parecer una herramienta con criterio propio y no competir con ella.
+
+**Detalles:** se siguieron los principios de la skill `design-taste-frontend` aplicables a una aplicación (un sistema de botones, una escala de radios, color plano, texto llano). Su flujo de construcción y verificación está pensado para páginas web de empresa y no se usó.
+
 ## Limitaciones conocidas y siguientes pasos
 
 - **Los agentes solo producen texto.** No tienen herramientas (ficheros, web, código) salvo lo que haga por su cuenta un proveedor CLI. Siguiente paso natural: herramientas por agente y un espacio de trabajo compartido por departamento.
 - **Sin memoria a largo plazo.** Cada agente recuerda los últimos 24 mensajes de su conversación; no hay resúmenes ni memoria entre tareas.
 - **Sin streaming** de las respuestas en el chat.
-- **Máximo 8 agentes** (8 mesas en el mapa).
+- **Tantos agentes como mesas** quepan en el plano; para más, se amplía en el modo arquitecto.
+- **Todas las oficinas de una instalación comparten worker y sesiones de CLI**: no se puede usar una cuenta distinta por oficina salvo con API keys o un servidor remoto.
+- **El modo arquitecto no deja colocar muebles sueltos** ni dibujar salas que no sean rectangulares.
 - **Reinicios:** las tareas que estén en curso al reiniciar el servidor se marcan como fallidas; no se reanudan.
 - **Sin presupuesto de tokens** por agente ni contador de coste.
 - **Un solo usuario por oficina**, sin login en la interfaz.

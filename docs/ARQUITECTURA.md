@@ -4,8 +4,8 @@
 
 | Servicio | Imagen | Responsabilidad |
 |---|---|---|
-| `web` | nginx + build de Vite | Sirve el frontend y hace de proxy de `/api` y `/ws` hacia `server` (`127.0.0.1:8080`). Un segundo puerto, el de enlace (`8090`), solo deja pasar `/link/`. |
-| `server` | `agent-office-backend` (`node dist/server.js`) | API REST, WebSocket, simulación, orquestación de agentes y persistencia en SQLite. |
+| `web` | nginx + build de Vite | Sirve el frontend y reparte las peticiones (`127.0.0.1:8080`): `/api/hub` va a la centralita y `/o/<puerto>/api` y `/o/<puerto>/ws` a la oficina de ese puerto. Un segundo puerto, el de enlace (`8090`), solo deja pasar `/o/<puerto>/link/`. |
+| `server` | `agent-office-backend` (`node dist/gateway.js`) | La centralita y, como procesos hijos, una oficina por puerto (3101, 3102…): API REST, WebSocket, simulación, orquestación de agentes y su SQLite. |
 | `worker` | `agent-office-backend` (`node dist/worker.js`) | Consume la cola `llm` y ejecuta las llamadas a los proveedores. |
 | `redis` | `redis:7-alpine` | Backend de la cola BullMQ. |
 
@@ -17,10 +17,11 @@
 
 | Archivo | Qué contiene |
 |---|---|
-| `server.ts` | Arranque, rutas REST y endpoint WebSocket. |
+| `gateway.ts` | Centralita: registro de oficinas (`offices.json`), arranque y reinicio de un proceso `server.js` por oficina, y API `/api/hub` para listarlas, abrirlas, eliminarlas y enlazarlas. |
+| `server.ts` | Una oficina: arranque, rutas REST y endpoint WebSocket. |
 | `brain.ts` | El «cerebro» de la oficina: runtimes de agentes, chat, tareas, delegación en equipo, entregas, vida ociosa, contratar/despedir. |
 | `sim.ts` | Actores (jugador y agentes), bucle de simulación (80 ms), movimiento, bocadillos y difusión del estado. |
-| `map.ts` | Mapa de la oficina (paredes, salas, muebles, mesas, puntos de interés) y búsqueda de caminos (BFS). |
+| `map.ts` | Plano de la oficina como datos (salas y puertas), su compilación a paredes, muebles, mesas y puntos de interés, su validación y la búsqueda de caminos (BFS). |
 | `llm.ts` | Cliente de la cola: encola un trabajo, espera el resultado y publica el estado de los trabajos. |
 | `worker.ts` | Proceso worker. En la oficina consume la cola de BullMQ; con `NODE_TOKEN` actúa como servidor remoto. |
 | `node-client.ts` | Lado del worker: conexión con la oficina, ejecución de trabajos remotos, estado de las sesiones de los CLIs y terminal de inicio de sesión. |
@@ -93,8 +94,14 @@ Un encargo recibido se convierte en una tarea local con `origin`; el agente la h
 
 ### API
 
+Las rutas de una oficina se sirven bajo `/o/<puerto>` (por ejemplo `GET /o/3101/api/bootstrap`). Las de la centralita no llevan prefijo.
+
 | Método y ruta | Uso |
 |---|---|
+| `GET/POST /api/hub/offices`, `DELETE /api/hub/offices/:id` | Centralita: listar, abrir y eliminar oficinas. |
+| `POST/DELETE /api/hub/links` | Centralita: enlazar o desenlazar dos oficinas de la instalación. |
+| `PUT /api/layout` | Aplicar un plano (`{layout}`) o volver al de serie (`{reset: true}`). Responde con el mapa compilado o `400` con el motivo. |
+| `GET /api/summary` | Resumen de la oficina para la centralita. |
 | `GET /api/bootstrap` | Estado completo inicial (mapa, actores, agentes, departamentos, proveedores, ajustes, tareas, feed, trabajos). |
 | `POST/PATCH/DELETE /api/agents[/:id]` | Contratar, editar, despedir. |
 | `GET /api/agents/:id/messages`, `POST /api/agents/:id/chat` | Conversación. |
@@ -115,16 +122,31 @@ Un encargo recibido se convierte en una tarea local con `origin`; el agente la h
 
 Los compis no existen en la simulación del servidor: el cliente los hace seguir a su dueño manteniéndolos a una distancia fija («correa») de su posición interpolada.
 
+### Varias oficinas en una instalación
+
+`gateway.ts` guarda en `offices.json` el puerto y la base de datos de cada oficina y lanza un `server.js` por cada una, con `PORT`, `DB_PATH` y `LINK_PREFIX=/o/<puerto>`. La primera usa la base de datos original, así que una instalación anterior conserva sus datos. Las oficinas no comparten estado: la cola de BullMQ es común, pero cada proceso espera solo sus trabajos.
+
+El worker pregunta a la centralita qué oficinas hay y abre con cada una su conexión de servidor local, de modo que la sesión de Claude Code o Codex iniciada desde una oficina sirve para todas.
+
+Enlazar dos oficinas de la misma instalación usa el mismo canal que con una de fuera: la centralita pide un token a una (`/internal/invite`) y se lo entrega a la otra (`/internal/join`) con la dirección interna `http://127.0.0.1:<puerto>`. Las rutas `/internal` no salen por nginx.
+
+### Plano editable
+
+El plano es un `Layout` (`w`, `h`, `rooms`, `doors`) guardado en los ajustes de la oficina. `compile` lo convierte en lo que usa la simulación: muros alrededor de cada sala, puertas válidas, muebles según el tipo y tamaño de la sala (`KINDS`), mesas y puntos de interés. `check` rechaza un plano fuera de límites, con salas solapadas, sin las salas obligatorias, con salas inaccesibles o con menos mesas que personas; antes intenta abrir puertas en los muros compartidos.
+
+Al aplicar un plano (`applyLayout` en `brain.ts`) se recolocan los actores que hayan quedado dentro de un muro, se recalculan los caminos en curso y se reparten las mesas: primero el despacho propio, luego las zonas del departamento de cada persona, luego las libres.
+
 ## Frontend (`web/src`)
 
 | Archivo | Qué contiene |
 |---|---|
 | `game/OfficeCanvas.tsx` | Bucle de render, cámara, clics y hover. |
+| `game/architect.ts` | Modo arquitecto: arrastre, redimensionado, puertas, alta de salas y deshacer. Cada cambio se envía entero al servidor, que valida y difunde el plano. |
 | `game/draw.ts` | Suelos, paredes y muebles (dibujados por código, sin assets). |
 | `game/character.ts` | Personajes y caras procedurales a partir del aspecto; retratos. |
 | `game/creature.ts` | Las ocho especies de compis y su dibujo en tres fases. |
 | `store.ts` | Estado global mínimo (`useSyncExternalStore`) y `world` (actores interpolados, fuera de React). |
-| `net.ts` | REST, WebSocket con reconexión y acciones (`go`, `selectAgent`). |
-| `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. `ui/Companions.tsx` reúne la elección inicial, el álbum, la barra de experiencia y el cuadro de diálogo. `ui/Servers.tsx` muestra los servidores y el inicio de sesión; `ui/OfficesModal.tsx`, las oficinas conectadas. |
+| `net.ts` | REST y WebSocket contra la oficina elegida (`/o/<puerto>`), API de la centralita, cambio de oficina y acciones (`go`, `selectAgent`). |
+| `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. `ui/Companions.tsx` reúne la elección inicial, el álbum, la barra de experiencia y el cuadro de diálogo. `ui/Servers.tsx` muestra los servidores y el inicio de sesión guiado; `ui/OfficesModal.tsx`, el panel de oficinas; `ui/Architect.tsx`, el panel del modo arquitecto. |
 
 El orden de pintado es por profundidad (coordenada Y de la base de cada pared, mueble o personaje), lo que da la sensación de vista 3/4: un agente sentado queda detrás de su mesa y quien está al norte de una pared queda tapado por ella.

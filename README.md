@@ -33,11 +33,14 @@ Para parar: `docker compose down` (los datos se conservan en volúmenes; `docker
 | Encargar algo a un departamento | **Equipo y departamentos → Encargar un trabajo a todo el departamento**. El responsable convoca una reunión, reparte, espera las entregas y te trae el resultado integrado. |
 | Contratar / editar / despedir | Mostrador de **RRHH** o botón **Contratar agente**. Nombre, puesto, personalidad, cara, ropa, departamento y cerebro. |
 | Crear departamentos | **Equipo y departamentos**: nombre, color, misión, responsable (★) y miembros. |
-| Configurar el LLM | Tu ordenador (despacho) o la consola de la **sala de servidores**. |
-| Iniciar sesión en Claude Code o Codex | **LLM y ajustes → Servidores y sesiones → Iniciar sesión**. |
+| Configurar el LLM | **Modelos y ajustes** (o tu ordenador, o la consola de la sala de servidores). Arriba, «Conectar en un paso»: tu cuenta de Claude, tu cuenta de ChatGPT o una API key pegada. |
+| Iniciar sesión en Claude Code o Codex | **Modelos y ajustes → Iniciar sesión**: botón para abrir la página, botón para copiar el enlace o el código, y al terminar la oficina empieza a usar esa cuenta. |
+| Cambiar de oficina | Pulsa el nombre de la oficina, arriba a la izquierda. |
+| Abrir, enlazar o eliminar oficinas | **Oficinas → Mis oficinas**. |
+| Cambiar el plano | **Arquitecto**: mueve y redimensiona salas, abre puertas, añade departamentos, despachos y salas. |
 | Poner agentes en otro servidor | **Servidores y sesiones → Añadir un servidor remoto**, y elige «Dónde se ejecuta» al editar el agente. |
-| Conectar con otra oficina | **Oficinas** (o el globo de RRHH): una invita, la otra se une con el código. |
-| Ver las ejecuciones en segundo plano | Indicador de la barra superior o pestaña **Segundo plano**. |
+| Conectar con una oficina de otro equipo | **Oficinas → Oficinas de fuera**: una crea la invitación y la otra la pega. |
+| Ver las ejecuciones en segundo plano | Indicador de la barra superior o pestaña **Actividad**. |
 | Ver todas las tareas y resultados | **Tablón de tareas** de la sala de reuniones. |
 | Ver los compis, su nivel y las formas descubiertas | **Álbum de compis**. |
 
@@ -71,25 +74,35 @@ Un servidor remoto ejecuta el trabajo de los agentes que le asignes (por ejemplo
 1. En **Servidores y sesiones** añade el servidor: la oficina te da el comando con su token.
 2. En la máquina remota, con este repositorio clonado:
    ```bash
-   OFFICE_URL=http://direccion-de-la-oficina:8090 NODE_TOKEN=<token> docker compose -f docker-compose.node.yml up -d --build
+   OFFICE_URL=http://direccion-de-la-oficina:8090/o/3101 NODE_TOKEN=<token> docker compose -f docker-compose.node.yml up -d --build
    ```
 3. Al editar un agente, elige el servidor en **Dónde se ejecuta**.
 
 Es el servidor remoto quien se conecta a la oficina, así que no necesita puertos abiertos. La oficina sí debe ser alcanzable por su **puerto de enlace** (ver más abajo). Desde la oficina puedes iniciar sesión en Claude Code y Codex de cada servidor.
 
-## Varias oficinas conectadas
+## Varias oficinas
 
-Cada oficina es una instalación independiente (en otra máquina o en la misma con otro nombre de proyecto y otros puertos):
+Una instalación aloja todas las oficinas que quieras en la misma dirección. En **Oficinas → Mis oficinas** abres una nueva (llega con su plantilla, su plano y sus ajustes), entras en cualquiera, las enlazas entre sí con un botón o las eliminas. Para cambiar rápido, pulsa el nombre de la oficina en la barra superior.
 
-```bash
-OFFICE_PORT=8081 LINK_PORT=8091 docker compose -p agent-office-2 up -d
-```
+Dos oficinas enlazadas se ven la gente y los departamentos, se encargan trabajo y, cuando terminan, alguien de esa oficina entra por la puerta a entregártelo en persona (**Oficinas → Encargar a otra oficina**).
 
-Para conectarlas, una genera un **código de invitación** en *Oficinas* y la otra lo pega. A partir de ahí cada una ve a la gente y los departamentos de la otra, puede encargarles trabajo y, cuando terminan, alguien de esa oficina entra por la puerta a entregártelo en persona.
+Una oficina de otro equipo se enlaza igual, pero con una invitación: una la crea en **Oficinas de fuera** y la otra la pega.
+
+## Modo arquitecto
+
+El botón **Arquitecto** convierte la oficina en un plano editable:
+
+- **Arrastra** una sala para moverla y **tira de una esquina** para cambiarle el tamaño.
+- **Pulsa un muro** entre dos salas para abrir o cerrar una puerta. Si una sala se queda sin acceso, se le abre una sola.
+- **Añade** zonas de departamento, despachos, salas de reuniones, cafeterías, salas de descanso y salas de servidores. Si no caben, la planta crece.
+- Una zona de departamento se asigna a un departamento (o crea uno nuevo): su gente se sienta ahí. Un despacho se le puede dar a una persona.
+- Los muebles y las mesas se colocan solos según el tipo y el tamaño de la sala. **Deshacer** revierte el último cambio y **Plano de serie** vuelve al original.
+
+La oficina no deja guardar un plano con salas solapadas, aisladas o con menos mesas que personas, y siempre conserva tu despacho, RRHH y una sala de reuniones.
 
 ### Puerto de enlace
 
-Los servidores remotos y las otras oficinas entran por un puerto aparte (`LINK_PORT`, 8090) que solo expone las rutas `/link/`, protegidas por token. Por defecto solo escucha en `127.0.0.1`; para aceptar conexiones de otras máquinas pon `LINK_BIND=0.0.0.0` en `.env`. La interfaz y la API siguen siendo solo locales.
+Los servidores remotos y las otras oficinas entran por un puerto aparte (`LINK_PORT`, 8090) que solo expone las rutas `/o/<oficina>/link/`, protegidas por token. Por defecto solo escucha en `127.0.0.1`; para aceptar conexiones de otras máquinas pon `LINK_BIND=0.0.0.0` en `.env`. La interfaz y la API siguen siendo solo locales.
 
 ## Proveedores de LLM
 

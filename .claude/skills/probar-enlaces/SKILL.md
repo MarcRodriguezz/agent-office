@@ -11,11 +11,11 @@ Todo se puede probar en una sola máquina con Docker. La oficina principal debe 
 
 1. Crea el servidor y copia su token:
    ```bash
-   curl -s -X POST localhost:8080/api/nodes -H 'content-type: application/json' -d '{"name":"Servidor de pruebas"}'
+   curl -s -X POST localhost:8080/o/3101/api/nodes -H 'content-type: application/json' -d '{"name":"Servidor de pruebas"}'
    ```
 2. Levántalo apuntando al puerto de enlace:
    ```bash
-   OFFICE_URL=http://host.docker.internal:8090 NODE_TOKEN=<token> docker compose -f docker-compose.node.yml up -d
+   OFFICE_URL=http://host.docker.internal:8090/o/3101 NODE_TOKEN=<token> docker compose -f docker-compose.node.yml up -d
    ```
 3. En `GET /api/bootstrap`, `nodes` debe mostrarlo con `online: true` y la versión de los CLIs.
 4. Prueba un trabajo remoto: `POST /api/providers/<id>/test` con `{"nodeId":"<id del servidor>"}`. En `/api/jobs` el campo `node` debe ser el nombre del servidor.
@@ -25,17 +25,23 @@ Para quitarlo: `docker compose -p agent-office-node down -v` y bórralo en la in
 
 ## Segunda oficina
 
+No hace falta otro despliegue: la centralita abre oficinas en la misma instalación.
+
 ```bash
-OFFICE_PORT=8081 LINK_PORT=8091 docker compose -p agent-office-2 up -d
+curl -X POST localhost:8080/api/hub/offices -H 'content-type: application/json' -d '{"name":"Oficina Norte"}'   # devuelve su id (3102…)
+curl -X POST localhost:8080/api/hub/links -H 'content-type: application/json' -d '{"a":"3101","b":"3102"}'
+curl localhost:8080/api/hub/offices
 ```
 
-1. En http://localhost:8081, **Oficinas → Generar código de invitación** con la dirección `http://host.docker.internal:8091`.
-2. En http://localhost:8080, **Oficinas → Unirme con un código**.
-3. Las dos deben verse en línea y con el directorio de la otra.
+1. `GET /api/hub/offices` debe mostrar las dos con un enlace `online: true` hacia la otra.
+2. En la interfaz, el nombre de la oficina (arriba a la izquierda) permite cambiar entre ellas.
+3. `GET /o/3101/api/bootstrap` debe traer en `offices.peers` el directorio de la otra.
 4. Envía un encargo a una persona y a un departamento. Comprueba en la oficina que lo recibe que la tarea lleva el origen, y en la que lo pidió que entra un visitante a entregarlo y aparece el cuadro de diálogo.
-5. Reinicia el servidor de una de ellas (`docker compose -p agent-office-2 up -d --force-recreate server`): el enlace debe volver solo en unos segundos.
+5. Reinicia el servidor (`docker compose up -d --force-recreate server`): todas las oficinas deben volver y reenlazarse solas en unos segundos.
 
-Para quitarla: `docker compose -p agent-office-2 down -v`.
+Para quitarla: `curl -X DELETE localhost:8080/api/hub/offices/3102` (o **Oficinas → Eliminar esta oficina**). La otra oficina debe perder el enlace.
+
+El enlace con una oficina de otro equipo se prueba con una segunda instalación (`OFFICE_PORT=8081 LINK_PORT=8091 docker compose -p agent-office-2 up -d`) y una invitación de **Oficinas → Oficinas de fuera**.
 
 ## Inicio de sesión de los CLIs
 

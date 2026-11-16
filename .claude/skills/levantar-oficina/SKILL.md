@@ -18,13 +18,13 @@ Deben quedar cuatro servicios en marcha: `redis` (healthy), `server`, `worker` y
 
 ```bash
 curl -s localhost:8080/api/health
-curl -s localhost:8080/api/bootstrap | head -c 300
+curl -s localhost:8080/o/3101/api/bootstrap | head -c 300
 ```
 
 Prueba de la cola con el proveedor simulado (sustituye el id por uno de `providers` del bootstrap):
 
 ```bash
-curl -s -X POST localhost:8080/api/providers/<id>/test
+curl -s -X POST localhost:8080/o/3101/api/providers/<id>/test
 ```
 
 Debe responder `{"ok":true,...}` en 2–4 segundos. Si se queda colgado, el worker no está consumiendo: `docker compose logs worker`.
@@ -32,7 +32,7 @@ Debe responder `{"ok":true,...}` en 2–4 segundos. Si se queda colgado, el work
 ## 3. Probar el flujo de equipo
 
 ```bash
-curl -s -X POST localhost:8080/api/teams/<teamId>/tasks \
+curl -s -X POST localhost:8080/o/3101/api/teams/<teamId>/tasks \
   -H "content-type: application/json" \
   -d '{"title":"Prueba","description":"Preparad un plan breve."}'
 ```
