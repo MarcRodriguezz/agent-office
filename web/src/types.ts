@@ -105,6 +105,14 @@ export interface Settings {
   playerXp: number;
   defaultProviderId: string | null;
   officeName: string;
+  managerId: string | null;
+}
+
+export interface StaffTemplate {
+  id: string;
+  name: string;
+  summary: string;
+  people: number;
 }
 
 export interface ActorSnap {

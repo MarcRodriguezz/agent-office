@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_APPEARANCE } from '../game/character';
 import { api, copy } from '../net';
 import { setState, toast, useStore } from '../store';
+import { DEMO } from '../transport';
 import type { LoginAction, Provider, ProviderKind } from '../types';
 import { AppearanceEditor } from './AgentEditor';
 import { Modal } from './common';
@@ -160,7 +161,7 @@ function QuickCli({ cli }: { cli: Cli }) {
         <small>{CLI_LABEL[cli]} · sin API key</small>
       </header>
       {!node?.online || !auth ? <p className="facts">Esperando al worker de la oficina…</p>
-        : !auth.installed ? <p className="facts">{CLI_LABEL[cli]} no está instalado en la imagen.</p>
+        : !auth.installed ? <p className="facts">{DEMO ? 'Disponible al instalar Agent Office con Docker: inicias sesión con dos clics.' : `${CLI_LABEL[cli]} no está instalado en la imagen.`}</p>
           : auth.loggedIn ? (
             <>
               <p className="facts"><span className="pill green">Sesión iniciada</span> {auth.detail}</p>

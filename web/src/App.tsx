@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { OfficeCanvas } from './game/OfficeCanvas';
 import { bootstrap } from './net';
 import { useStore } from './store';
+import { DEMO } from './transport';
 import { AgentEditor } from './ui/AgentEditor';
 import { AgentPanel } from './ui/AgentPanel';
 import { Architect } from './ui/Architect';
@@ -50,6 +51,12 @@ export function App() {
       <Roster />
       <Feed />
       {!architect && <div className="help"><kbd>WASD</kbd> o clic para moverte · <kbd>E</kbd> o clic en alguien para hablar · rueda para acercar</div>}
+      {DEMO && !modal && (
+        <div className="demobar">
+          <b>Demo</b>
+          <span>Corre entera en tu navegador con respuestas simuladas y se reinicia al recargar. Para usar modelos reales, <a href="https://github.com/MarcRodriguezz/agent-office" target="_blank" rel="noreferrer">instálala con Docker</a>.</span>
+        </div>
+      )}
       <DialogBox />
       {architect ? <Architect /> : <AgentPanel />}
       <Toasts />

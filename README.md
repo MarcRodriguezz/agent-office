@@ -8,6 +8,8 @@ Los agentes pueden ejecutarse en esta máquina o en **servidores remotos** tuyos
 
 Todo corre en Docker con un solo comando.
 
+**Demo en el navegador:** https://agent-office-5cj.pages.dev (cerebro simulado, sin instalar nada).
+
 ## Arranque rápido
 
 ```bash

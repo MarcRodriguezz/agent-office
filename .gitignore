@@ -7,3 +7,5 @@ data
 skills-lock.json
 .taste-skill/
 .playwright-mcp/
+dist-demo
+.wrangler

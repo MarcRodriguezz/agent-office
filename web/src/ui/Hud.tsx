@@ -95,10 +95,12 @@ export function Roster() {
   const agents = useStore((s) => s.agents);
   const teams = useStore((s) => s.teams);
   const selected = useStore((s) => s.selectedAgentId);
+  const managerId = useStore((s) => s.settings.managerId);
   const status = useActorStatus();
   const groups: { id: string; name: string; color: string; members: Agent[] }[] = [
+    { id: 'manager', name: 'Dirección', color: '#1c1b19', members: agents.filter((a) => a.id === managerId) },
     ...teams.map((t) => ({ id: t.id, name: t.name, color: t.color, members: agents.filter((a) => a.teamId === t.id) })),
-    { id: 'none', name: 'Sin departamento', color: '#6b7385', members: agents.filter((a) => !teams.some((t) => t.id === a.teamId)) },
+    { id: 'none', name: 'Sin departamento', color: '#6b7385', members: agents.filter((a) => a.id !== managerId && !teams.some((t) => t.id === a.teamId)) },
   ].filter((g) => g.members.length);
   return (
     <aside className="roster">
@@ -107,7 +109,7 @@ export function Roster() {
           <h3><i style={{ background: g.color }} />{g.name}</h3>
           {g.members.map((a) => {
             const st = status(a.id);
-            const lead = teams.some((t) => t.leadId === a.id);
+            const lead = a.id === managerId || teams.some((t) => t.leadId === a.id);
             return (
               <button key={a.id} className={`person ${selected === a.id ? 'active' : ''}`} onClick={() => void selectAgent(a.id)}>
                 <Avatar appearance={a.appearance} size={34} bg={`${g.color}55`} />

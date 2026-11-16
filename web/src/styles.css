@@ -214,6 +214,17 @@ footer span { flex: 1; }
 .toolbar input { width: 300px; }
 .teamcard { border: 1.5px solid var(--ink); border-left-width: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--card); }
 .teamcard.loose { border-left-color: #8a8478; }
+.teamcard.manager { border-left-color: var(--ink); }
+.teamcard.manager .members { align-items: center; flex-wrap: nowrap; }
+.teamcard.manager .facts { max-width: 52ch; }
+.teamtitle { font-size: 16px; padding-left: 8px; }
+label.inline { flex: none; width: 300px; }
+.templates { border-top: 2px solid var(--ink); padding-top: 12px; }
+.templates .row select { flex: 1; min-width: 0; }
+.demobar { position: fixed; right: 12px; bottom: 10px; z-index: 5; max-width: 420px; background: var(--paper); border: 2px solid var(--ink); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35); padding: 8px 12px; font-size: 12.5px; line-height: 1.45; display: flex; gap: 10px; align-items: center; }
+.demobar b { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; color: var(--accent); flex: none; }
+.demobar a { color: var(--ink); font-weight: 600; }
+.app.with-panel .demobar { display: none; }
 .teamhead { display: flex; align-items: center; gap: 10px; }
 .teamhead span { flex: 1; }
 .teamhead .swatches { width: 92px; flex: none; }

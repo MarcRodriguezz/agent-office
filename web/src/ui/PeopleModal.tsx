@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, selectAgent } from '../net';
 import { setState, toast, useStore } from '../store';
-import type { Team } from '../types';
+import type { Agent, Team } from '../types';
 import { Avatar, Modal } from './common';
 
 const COLORS = ['#4f8cff', '#ff7a59', '#2fa37a', '#7c5cff', '#e0668a', '#f2c14e', '#38b6c9', '#e25555'];
@@ -59,15 +59,15 @@ function TeamCard({ team }: { team: Team }) {
         <div className="member add">
           {others.length > 0 && (
             <select value="" onChange={(e) => e.target.value && void setMembers([...members.map((m) => m.id), e.target.value])}>
-              <option value="">＋ Añadir…</option>
+              <option value="">Añadir…</option>
               {others.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.role}</option>)}
             </select>
           )}
-          <button onClick={() => setState({ modal: { kind: 'agent', teamId: team.id } })}>＋ Contratar</button>
+          <button onClick={() => setState({ modal: { kind: 'agent', teamId: team.id } })}>Contratar</button>
         </div>
       </div>
       <details>
-        <summary>📌 Encargar un trabajo a todo el departamento</summary>
+        <summary>Encargar un trabajo a todo el departamento</summary>
         <p className="hint">El responsable (★) convoca una reunión, reparte el trabajo entre el equipo, cada uno hace su parte en segundo plano y te trae el resultado integrado.</p>
         <input value={title} placeholder="Título del encargo" onChange={(e) => setTitle(e.target.value)} />
         <textarea rows={3} value={description} placeholder="Describe el objetivo…" onChange={(e) => setDescription(e.target.value)} />
@@ -77,26 +77,107 @@ function TeamCard({ team }: { team: Team }) {
   );
 }
 
+function ManagerCard({ agents }: { agents: Agent[] }) {
+  const managerId = useStore((s) => s.settings.managerId);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const manager = agents.find((a) => a.id === managerId);
+  const assign = async () => {
+    if (!manager) return;
+    try {
+      await api('POST', `/agents/${manager.id}/tasks`, { title, description });
+      setTitle('');
+      setDescription('');
+      setState({ modal: null });
+      toast(`Encargo enviado a ${manager.name}: lo repartirá entre toda la oficina`);
+    } catch (e) {
+      toast((e as Error).message, false);
+    }
+  };
+  return (
+    <section className="teamcard manager">
+      <div className="teamhead">
+        <strong className="teamtitle">Dirección</strong>
+        <span />
+        <label className="inline">Manager de la oficina
+          <select value={managerId ?? ''} onChange={(e) => void api('PATCH', '/settings', { managerId: e.target.value || null }).catch((err) => toast(err.message, false))}>
+            <option value="">Nadie: tú repartes el trabajo</option>
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.role}</option>)}
+          </select>
+        </label>
+      </div>
+      {manager ? (
+        <>
+          <div className="members">
+            <div className="member lead">
+              <button className="face" onClick={() => { setState({ modal: null }); void selectAgent(manager.id); }} title="Ir a hablar">
+                <Avatar appearance={manager.appearance} size={44} />
+              </button>
+              <strong>{manager.name}</strong>
+              <small>{manager.role}</small>
+            </div>
+            <p className="facts">Recibe tus encargos, decide a quién le toca cada parte entre toda la oficina, espera las entregas y te trae un único resultado.</p>
+          </div>
+          <details>
+            <summary>Encargar un trabajo a toda la oficina</summary>
+            <input value={title} placeholder="Título del encargo" onChange={(e) => setTitle(e.target.value)} />
+            <textarea rows={3} value={description} placeholder="Describe el objetivo…" onChange={(e) => setDescription(e.target.value)} />
+            <button className="primary" disabled={!title.trim()} onClick={() => void assign()}>Encargar a {manager.name}</button>
+          </details>
+        </>
+      ) : <p className="facts">Sin manager, cada encargo va a una persona o a un departamento. Elige a alguien para que coordine a toda la oficina.</p>}
+    </section>
+  );
+}
+
+function Templates() {
+  const templates = useStore((s) => s.templates);
+  const people = useStore((s) => s.agents.length);
+  const [choice, setChoice] = useState('');
+  const load = async () => {
+    const template = templates.find((t) => t.id === choice);
+    if (!template) return;
+    if (!confirm(`¿Sustituir a las ${people} personas actuales por «${template.name}»? Se pierden sus conversaciones, sus niveles y sus departamentos.`)) return;
+    await api('POST', '/staff', { template: choice }).then(() => toast(`«${template.name}» ya está en la oficina`), (e) => toast(e.message, false));
+    setChoice('');
+  };
+  return (
+    <details className="templates">
+      <summary>Empezar con otro equipo</summary>
+      <p className="hint">Cambia toda la plantilla por un equipo ya montado. Tus proveedores, tu plano y tu perfil no se tocan.</p>
+      <div className="row">
+        <select value={choice} onChange={(e) => setChoice(e.target.value)}>
+          <option value="">Elige un equipo</option>
+          {templates.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.summary}</option>)}
+        </select>
+        <button className="danger" disabled={!choice} onClick={() => void load()}>Sustituir plantilla</button>
+      </div>
+    </details>
+  );
+}
+
 export function PeopleModal() {
   const teams = useStore((s) => s.teams);
   const agents = useStore((s) => s.agents);
+  const managerId = useStore((s) => s.settings.managerId);
   const [name, setName] = useState('');
-  const loose = agents.filter((a) => !teams.some((t) => t.id === a.teamId));
+  const loose = agents.filter((a) => a.id !== managerId && !teams.some((t) => t.id === a.teamId));
   const create = async () => {
     if (!name.trim()) return;
     await api('POST', '/teams', { name, color: COLORS[teams.length % COLORS.length] }).catch((e) => toast(e.message, false));
     setName('');
   };
   return (
-    <Modal title="RRHH · Equipo y departamentos" onClose={() => setState({ modal: null })} wide>
+    <Modal title="Equipo y departamentos" onClose={() => setState({ modal: null })} wide>
       <div className="people">
         <div className="toolbar">
-          <button className="primary" onClick={() => setState({ modal: { kind: 'agent' } })}>＋ Contratar agente</button>
+          <button className="primary" onClick={() => setState({ modal: { kind: 'agent' } })}>Contratar a alguien</button>
           <span />
           <input value={name} placeholder="Nuevo departamento (Ventas, Soporte, Legal…)" onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void create()} />
           <button onClick={() => void create()} disabled={!name.trim()}>Crear departamento</button>
         </div>
+        <ManagerCard agents={agents} />
         {teams.map((t) => <TeamCard key={t.id} team={t} />)}
         {loose.length > 0 && (
           <section className="teamcard loose">
@@ -112,6 +193,7 @@ export function PeopleModal() {
             </div>
           </section>
         )}
+        <Templates />
       </div>
     </Modal>
   );

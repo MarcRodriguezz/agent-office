@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type {
-  ActorSnap, Agent, Appearance, ChatMessage, Companion, FeedEvent, HubOffice, JobsState, MapData, NodeState, OfficesState, Provider, Settings, Task,
+  ActorSnap, Agent, Appearance, ChatMessage, Companion, FeedEvent, HubOffice, JobsState, MapData, NodeState, OfficesState, Provider, Settings, StaffTemplate, Task,
   Team, Visitor,
 } from './types';
 
@@ -40,6 +40,7 @@ export interface State {
   offices: OfficesState;
   visitors: Visitor[];
   hub: HubOffice[];
+  templates: StaffTemplate[];
   officeId: string;
   architect: boolean;
   roomId: string | null;
@@ -75,7 +76,7 @@ let state: State = {
   agents: [],
   teams: [],
   providers: [],
-  settings: { playerName: 'Jefe', playerAppearance: null, playerCompanion: null, playerXp: 0, defaultProviderId: null, officeName: 'Mi oficina' },
+  settings: { playerName: 'Jefe', playerAppearance: null, playerCompanion: null, playerXp: 0, defaultProviderId: null, officeName: 'Mi oficina', managerId: null },
   tasks: [],
   feed: [],
   jobs: { jobs: [], totals: { completed: 0, failed: 0 }, waiting: 0, active: 0 },
@@ -88,6 +89,7 @@ let state: State = {
   offices: { office: { id: '', name: '', linkUrl: '', linkBase: '' }, peers: [], remoteTasks: [] },
   visitors: [],
   hub: [],
+  templates: [],
   officeId: '',
   architect: false,
   roomId: null,

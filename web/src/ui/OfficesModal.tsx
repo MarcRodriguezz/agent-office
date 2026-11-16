@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { levelOf } from '../game/creature';
-import { api, copy, hubApi, refreshHub, switchOffice } from '../net';
+import { api, apiOf, copy, hubApi, refreshHub, switchOffice } from '../net';
+import { DEMO } from '../transport';
 import { setState, toast, useStore } from '../store';
 import type { HubOffice, PeerState, RemoteTask } from '../types';
 import { Avatar, Markdown, Modal, timeAgo } from './common';
@@ -44,9 +45,7 @@ function OfficeCard({ office, all }: { office: HubOffice; all: HubOffice[] }) {
 
   const rename = () => {
     if (!name.trim() || name.trim() === office.name) return;
-    void run(() => fetch(`/o/${office.id}/api/settings`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ officeName: name.trim() }),
-    }));
+    void run(() => apiOf(office.id, 'PATCH', '/settings', { officeName: name.trim() }));
   };
   const remove = () => {
     if (!confirm(`¿Eliminar «${office.name}»? Se borran su gente, sus tareas y sus conversaciones. No se puede deshacer.`)) return;
@@ -92,11 +91,13 @@ function OfficeCard({ office, all }: { office: HubOffice; all: HubOffice[] }) {
 
 function Mine() {
   const hub = useHub();
+  const templates = useStore((s) => s.templates);
   const [name, setName] = useState('');
+  const [template, setTemplate] = useState('dev');
   const [busy, setBusy] = useState(false);
   const create = async () => {
     setBusy(true);
-    if (await run(() => hubApi('POST', '/offices', { name }), `«${name}» está lista`)) setName('');
+    if (await run(() => hubApi('POST', '/offices', { name, template }), `«${name}» está lista`)) setName('');
     setBusy(false);
   };
   return (
@@ -111,8 +112,14 @@ function Mine() {
           <h4>Abrir otra oficina</h4>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre: Oficina Norte, Estudio…" maxLength={60}
             onKeyDown={(e) => e.key === 'Enter' && name.trim() && !busy && void create()} />
-          <button className="primary" disabled={!name.trim() || busy} onClick={() => void create()}>{busy ? 'Abriendo…' : 'Abrir oficina'}</button>
-          <p className="facts">Llega con su propia plantilla, su plano y sus ajustes.</p>
+          <label>Equipo con el que empieza
+            <select value={template} onChange={(e) => setTemplate(e.target.value)}>
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          <p className="facts">{templates.find((t) => t.id === template)?.summary}</p>
+          <button className="primary" disabled={!name.trim() || busy || DEMO} onClick={() => void create()}>{busy ? 'Abriendo…' : 'Abrir oficina'}</button>
+          {DEMO && <p className="facts">En la demo del navegador solo hay una oficina. Con la instalación en Docker abres las que quieras.</p>}
         </section>
       </div>
     </div>

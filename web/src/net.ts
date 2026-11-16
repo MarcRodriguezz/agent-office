@@ -1,21 +1,13 @@
 import { applyActors, getState, setState, toast, world } from './store';
+import { openLink, request, type Link } from './transport';
 import type { ChatMessage, GoTarget, HubOffice, Layout, LoginAction, MapData, Task } from './types';
 
 const OFFICE_KEY = 'agent-office:oficina';
 
-async function request<T>(url: string, method: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
-  return data as T;
-}
+export const apiOf = <T = any>(officeId: string, method: string, path: string, body?: unknown) =>
+  request<T>(`/o/${officeId}/api${path}`, method, body);
 
-export const api = <T = any>(method: string, path: string, body?: unknown) =>
-  request<T>(`/o/${getState().officeId}/api${path}`, method, body);
+export const api = <T = any>(method: string, path: string, body?: unknown) => apiOf<T>(getState().officeId, method, path, body);
 
 export const hubApi = <T = any>(method: string, path: string, body?: unknown) => request<T>(`/api/hub${path}`, method, body);
 
@@ -25,7 +17,7 @@ export async function refreshHub(): Promise<HubOffice[]> {
   return hub;
 }
 
-let socket: WebSocket | null = null;
+let socket: Link | null = null;
 let generation = 0;
 let tokenSeq = 0;
 const waiting = new Map<number, (ok: boolean) => void>();
@@ -123,21 +115,20 @@ function handle(msg: any) {
 }
 
 function connect() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const mine = generation;
-  const ws = new WebSocket(`${proto}://${location.host}/o/${getState().officeId}/ws`);
-  socket = ws;
-  ws.onopen = () => mine === generation && setState({ connected: true });
-  ws.onmessage = (e) => mine === generation && handle(JSON.parse(e.data));
-  ws.onclose = () => {
-    if (mine !== generation) return;
-    setState({ connected: false });
-    waiting.forEach((resolve) => resolve(false));
-    waiting.clear();
-    terms.forEach((t) => t.onExit(1));
-    terms.clear();
-    setTimeout(() => void bootstrap().catch(() => connect()), 1500);
-  };
+  socket = openLink(getState().officeId, {
+    open: () => mine === generation && setState({ connected: true }),
+    message: (msg) => mine === generation && handle(msg),
+    close: () => {
+      if (mine !== generation) return;
+      setState({ connected: false });
+      waiting.forEach((resolve) => resolve(false));
+      waiting.clear();
+      terms.forEach((t) => t.onExit(1));
+      terms.clear();
+      setTimeout(() => void bootstrap().catch(() => connect()), 1500);
+    },
+  });
 }
 
 export async function bootstrap() {
@@ -154,7 +145,7 @@ export async function bootstrap() {
   setState({
     ready: true, map: data.map, agents: data.agents, teams: data.teams, providers: data.providers,
     settings: data.settings, tasks: data.tasks, feed: data.feed, jobs: data.jobs,
-    nodes: data.nodes, offices: data.offices, visitors: data.visitors,
+    nodes: data.nodes, offices: data.offices, visitors: data.visitors, templates: data.templates ?? [],
   });
   connect();
 }
@@ -182,17 +173,17 @@ export const copy = (text: string, done = 'Copiado') =>
   navigator.clipboard.writeText(text).then(() => toast(done), () => toast('El navegador no ha dejado copiar. Selecciona el texto y cópialo a mano.', false));
 
 export function go(target: GoTarget): Promise<boolean> {
-  if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.resolve(false);
+  if (!socket?.isOpen()) return Promise.resolve(false);
   const token = ++tokenSeq;
-  socket.send(JSON.stringify({ type: 'go', token, target }));
+  socket.send({ type: 'go', token, target });
   return new Promise((resolve) => waiting.set(token, resolve));
 }
 
 export async function openTerm(nodeId: string, action: LoginAction, onData: (data: string) => void, onExit: (code: number) => void) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) return null;
+  if (!socket?.isOpen()) return null;
   const ws = socket;
   const ref = ++tokenSeq;
-  ws.send(JSON.stringify({ type: 'term-start', ref, nodeId, action }));
+  ws.send({ type: 'term-start', ref, nodeId, action });
   const sid = await new Promise<string | null>((resolve) => {
     termStarts.set(ref, resolve);
     setTimeout(() => resolve(null), 8000);
@@ -200,17 +191,17 @@ export async function openTerm(nodeId: string, action: LoginAction, onData: (dat
   if (!sid) return null;
   terms.set(sid, { onData, onExit });
   return {
-    input: (data: string) => ws.send(JSON.stringify({ type: 'term-input', sid, data })),
-    kill: () => ws.send(JSON.stringify({ type: 'term-kill', sid })),
+    input: (data: string) => ws.send({ type: 'term-input', sid, data }),
+    kill: () => ws.send({ type: 'term-kill', sid }),
   };
 }
 
 export function step(dx: number, dy: number) {
-  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'step', dx, dy }));
+  socket?.send({ type: 'step', dx, dy });
 }
 
 export function sayAsPlayer(text: string) {
-  socket?.send(JSON.stringify({ type: 'say', text }));
+  socket?.send({ type: 'say', text });
 }
 
 export async function selectAgent(id: string, walk = true) {
