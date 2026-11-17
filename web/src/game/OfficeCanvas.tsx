@@ -5,6 +5,7 @@ import type { Furniture, MapData } from '../types';
 import { createArchitect } from './architect';
 import { DEFAULT_APPEARANCE, drawCharacter, roundRect } from './character';
 import { drawCreature, levelOf, stageOf } from './creature';
+import { daylight, lampsOf, paintGlow, paintNight, type Lamp } from './daylight';
 import { INTERACT_ICON, T, WALL_H, buildFloor, drawFurniture, drawWall, drawWindow, wallCells, wrapText } from './draw';
 
 const PANEL_W = 420;
@@ -50,6 +51,10 @@ export function OfficeCanvas() {
     let hoverFurniture: Furniture | null = null;
     let marker: { x: number; y: number; at: number } | null = null;
     let firstFrame = true;
+    const nightLayer = document.createElement('canvas');
+    let light = daylight();
+    let lamps: Lamp[] = [];
+    let lightAt = -Infinity;
     let teamsRef: unknown = null;
 
     const toWorld = (sx: number, sy: number): [number, number] => [
@@ -341,7 +346,8 @@ export function OfficeCanvas() {
 
       const drawables: { y: number; draw: () => void }[] = [];
       for (const cell of walls) drawables.push({ y: (cell.y + 1) * T, draw: () => drawWall(ctx, cell) });
-      for (const cell of walls) if (cell.window) drawables.push({ y: (cell.y + 1) * T + 1, draw: () => drawWindow(ctx, cell) });
+      const lit = new Set<string>();
+      for (const cell of walls) if (cell.window) drawables.push({ y: (cell.y + 1) * T + 1, draw: () => drawWindow(ctx, cell, light) });
       for (const f of map.furniture) {
         if (!f.block) continue;
         let working = false;
@@ -350,6 +356,7 @@ export function OfficeCanvas() {
           const owner = deskOwner.get(Number(f.id.split('-')[1]));
           const actor = owner && world.actors.get(owner.id);
           working = !!actor && actor.seated && actor.status === 'working';
+          if (owner && actor?.seated) lit.add(f.id);
           color = owner?.teamId ? teams.get(owner.teamId)?.color : undefined;
         }
         const wallRight = map.walls[f.y * map.w + f.x + 1] === 1;
@@ -383,6 +390,17 @@ export function OfficeCanvas() {
       }
       drawables.sort((p, q) => p.y - q.y);
       for (const d of drawables) d.draw();
+
+      if (now - lightAt > 1000) {
+        light = daylight();
+        lamps = lampsOf(map.furniture, T, lit);
+        if (light.dark > 0.01) paintNight(nightLayer, mapW + 28, mapH + WALL_H + 28, -14, -WALL_H - 14, 0.5, light, lamps);
+        lightAt = now;
+      }
+      if (light.dark > 0.01) {
+        ctx.drawImage(nightLayer, -14, -WALL_H - 14, mapW + 28, mapH + WALL_H + 28);
+        paintGlow(ctx, light, lamps);
+      }
 
       for (const f of map.furniture) {
         if (!f.interact) continue;

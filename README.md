@@ -70,6 +70,10 @@ Los agentes no solo escriben texto: trabajan sobre ficheros y usan herramientas 
 - **Herramientas externas.** En **Modelos y ajustes → Herramientas** conectas GitHub, Cloudflare, Vercel, Netlify o cualquier otro CLI que lea sus credenciales de variables de entorno. Puedes pegar un token o, en GitHub, iniciar sesión con un código como en Codex. Lo que instales y las sesiones que inicies se conservan entre reinicios. En cada agente marcas qué herramientas puede usar: lo normal es un agente o departamento por herramienta.
 - **Sesiones.** Cada agente recuerda lo hablado y hecho en su proyecto. En el Archivo ves las sesiones, las archivas para empezar de cero o continúas una anterior. En el panel del agente tienes *Empezar de cero*.
 
+## Día y noche
+
+La oficina sigue la hora de tu equipo: amanece, se hace de día, atardece y de noche solo quedan encendidos los monitores y las lámparas. El reloj de la barra superior marca la hora y la fase. Para verlo a otra hora, añade `?hora=23` a la dirección.
+
 ## Iniciar sesión con tu cuenta (Claude Code y Codex)
 
 No hace falta copiar tokens a mano. En **LLM y ajustes → Servidores y sesiones** cada servidor muestra si Claude Code y Codex tienen sesión:

@@ -1,4 +1,5 @@
 import type { Furniture, MapData } from '../types';
+import type { Daylight } from './daylight';
 import { roundRect } from './character';
 
 export const T = 48;
@@ -140,18 +141,26 @@ export function drawWall(ctx: Ctx, cell: { x: number; y: number; front: boolean;
   ctx.fillRect(px, py + T - WALL_H - 2, T, 2);
 }
 
-export function drawWindow(ctx: Ctx, cell: { x: number; y: number }) {
+export function drawWindow(ctx: Ctx, cell: { x: number; y: number }, light: Daylight) {
   const px = cell.x * T;
   const py = cell.y * T + T - WALL_H;
   ctx.fillStyle = '#ffffff';
   roundRect(ctx, px + 8, py + 4, T * 2 - 16, 17, 3);
   ctx.fill();
   const g = ctx.createLinearGradient(0, py + 6, 0, py + 19);
-  g.addColorStop(0, '#8fcdf4');
-  g.addColorStop(1, '#c9e9fb');
+  g.addColorStop(0, light.sky[0]);
+  g.addColorStop(1, light.sky[1]);
   ctx.fillStyle = g;
   ctx.fillRect(px + 11, py + 6, T - 14, 13);
   ctx.fillRect(px + T + 1, py + 6, T - 14, 13);
+  if (!light.stars) return;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  for (let i = 0; i < 4; i++) {
+    const sx = ((cell.x * 37 + i * 23) % (T * 2 - 26)) + 12;
+    const sy = ((cell.x * 13 + i * 7) % 9) + 8;
+    if (sx > T - 4 && sx < T + 2) continue;
+    ctx.fillRect(px + sx, py + sy, 1.5, 1.5);
+  }
 }
 
 function box(ctx: Ctx, x: number, y: number, w: number, h: number, e: number, top: string, front: string, r = 4) {

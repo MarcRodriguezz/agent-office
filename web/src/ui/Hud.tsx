@@ -3,6 +3,7 @@ import { go, refreshHub, selectAgent, switchOffice } from '../net';
 import { setState, useStore, world } from '../store';
 import type { Agent } from '../types';
 import { levelOf } from '../game/creature';
+import { clockText, daylight } from '../game/daylight';
 import { Avatar, STATUS_LABEL } from './common';
 
 function useActorStatus() {
@@ -56,6 +57,15 @@ function OfficeSwitch() {
   );
 }
 
+function Clock() {
+  const [light, setLight] = useState(daylight);
+  useEffect(() => {
+    const timer = setInterval(() => setLight(daylight()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+  return <span className={`clock ${light.dark > 0.3 ? 'night' : ''}`} title="Hora de tu equipo: la oficina se ilumina según el momento del día">{clockText(light)} · {light.label}</span>;
+}
+
 export function TopBar() {
   const architect = useStore((s) => s.architect);
   const jobs = useStore((s) => s.jobs);
@@ -86,6 +96,7 @@ export function TopBar() {
         <button className={architect ? 'on' : ''} onClick={() => setState({ architect: !architect, roomId: null, selectedAgentId: null })}>
           Arquitecto
         </button>
+        <Clock />
         <button className={`jobs ${running ? 'busy' : ''}`} onClick={() => setState({ modal: { kind: 'settings', tab: 'jobs' } })}
           title="Ejecuciones en segundo plano">
           <span className="pulse" /> {running ? `${running} pensando` : 'En reposo'}

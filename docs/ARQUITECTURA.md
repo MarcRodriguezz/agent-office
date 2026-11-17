@@ -160,6 +160,7 @@ Al aplicar un plano (`applyLayout` en `brain.ts`) se recolocan los actores que h
 | `game/draw.ts` | Suelos, paredes y muebles (dibujados por código, sin assets). |
 | `game/character.ts` | Personajes y caras procedurales a partir del aspecto; retratos. |
 | `game/creature.ts` | Las ocho especies de compis y su dibujo en tres fases. |
+| `game/daylight.ts` | Luz según la hora del navegador: fase del día, cielo de las ventanas, capa de noche y focos de luz. |
 | `store.ts` | Estado global mínimo (`useSyncExternalStore`) y `world` (actores interpolados, fuera de React). |
 | `net.ts` | REST y WebSocket contra la oficina elegida (`/o/<puerto>`), API de la centralita, cambio de oficina y acciones (`go`, `selectAgent`). |
 | `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. `ui/Companions.tsx` reúne la elección inicial, el álbum, la barra de experiencia y el cuadro de diálogo. `ui/Servers.tsx` muestra los servidores y el inicio de sesión guiado de cualquier herramienta; `ui/Tools.tsx`, las conexiones; `ui/ProjectsModal.tsx`, el archivo de proyectos y sesiones; `ui/OfficesModal.tsx`, el panel de oficinas; `ui/Architect.tsx`, el panel del modo arquitecto. |

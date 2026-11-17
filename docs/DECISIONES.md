@@ -1,6 +1,6 @@
 # Decisiones de diseño
 
-Registro de las decisiones tomadas, con su motivo y lo que se descartó. Decisiones 1 a 12: 2026-11-13. Decisiones 13 a 15: 2026-11-16. Decisiones 19 a 21: 2026-11-17.
+Registro de las decisiones tomadas, con su motivo y lo que se descartó. Decisiones 1 a 12: 2026-11-13. Decisiones 13 a 15: 2026-11-16. Decisiones 19 a 22: 2026-11-17.
 
 ## 1. Qué es el producto
 
@@ -233,6 +233,14 @@ Registro de las decisiones tomadas, con su motivo y lo que se descartó. Decisio
 - Una sesión pertenece a un agente, un proyecto, un tipo de cerebro y un servidor. Si cambia el cerebro o el servidor se empieza otra, porque la anterior no se puede retomar ahí.
 - Las llamadas de una misma sesión van de una en una: si le hablas mientras hace una tarea, te contesta al terminar. Reparto y síntesis de equipo no usan sesión; el resultado final se apunta en la del responsable.
 - Al cambiar a un agente de proyecto, la sesión del proyecto anterior se queda abierta y la retoma al volver.
+
+## 22. La oficina sigue la hora real
+
+**Decisión:** el navegador pinta la oficina según su hora local: de día, amanecer, atardecer o de noche. De noche las ventanas muestran cielo oscuro con estrellas y la oficina se oscurece, salvo las zonas iluminadas por monitores, consola, cafetería, recepción y tablón. Un reloj en la barra superior indica la hora y la fase.
+
+**Motivo:** da vida a la oficina y deja ver de un vistazo quién sigue en su mesa de noche. Es puramente visual, así que lo calcula el cliente y no cuesta nada al servidor.
+
+**Detalles:** la capa de noche se recalcula una vez por segundo a media resolución. `?hora=23` en la dirección fuerza una hora para probarlo.
 
 ## Limitaciones conocidas y siguientes pasos
 
