@@ -1,0 +1,14 @@
+name: Feature idea
+description: Propose something new for the office.
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: The idea
+      description: What you would like the office or the agents to do, and why.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: How it could work
+      description: Optional. How it would look in the office, and which decisions in docs/DECISIONS.md it touches.

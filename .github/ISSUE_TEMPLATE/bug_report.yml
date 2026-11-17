@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in the office does not work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Where
+      options:
+        - Browser demo
+        - Docker installation
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Brain
+      options:
+        - Mock
+        - Anthropic API
+        - OpenAI-compatible API
+        - Local model
+        - Claude Code
+        - Codex
+        - Custom command
+  - type: textarea
+    attributes:
+      label: Logs or screenshots
+      description: For example `docker compose logs server worker`. Remove any key or token first.
