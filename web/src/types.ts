@@ -1,6 +1,6 @@
 export type ProviderKind = 'mock' | 'anthropic' | 'openai' | 'claude-code' | 'codex' | 'cli';
 export type Facing = 'down' | 'up' | 'left' | 'right';
-export type Status = 'idle' | 'walking' | 'working' | 'thinking' | 'talking' | 'visiting' | 'waiting' | 'break';
+export type Status = 'idle' | 'walking' | 'working' | 'thinking' | 'talking' | 'visiting' | 'waiting' | 'break' | 'dancing';
 
 export interface Provider {
   id: string;
@@ -180,7 +180,7 @@ export interface ActorSnap {
   status: Status;
 }
 
-export type RoomKind = 'boss' | 'meeting' | 'server' | 'hr' | 'work' | 'cafe' | 'office' | 'lounge';
+export type RoomKind = 'boss' | 'meeting' | 'server' | 'hr' | 'work' | 'cafe' | 'office' | 'lounge' | 'fun';
 
 export interface RoomDef {
   id: string;
@@ -232,7 +232,7 @@ export interface Furniture {
   w: number;
   h: number;
   block: boolean;
-  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices' | 'projects';
+  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices' | 'projects' | 'meeting' | 'party';
   label?: string;
   spot?: [number, number];
 }
@@ -329,4 +329,28 @@ export interface Visitor {
   appearance: Appearance;
   companion: Companion | null;
   xp: number;
+}
+
+export type MeetingGoal = 'discuss' | 'spec';
+
+export interface MeetingLine {
+  id: string;
+  speaker: string | null;
+  text: string;
+  at: number;
+}
+
+export interface Meeting {
+  id: string;
+  title: string;
+  brief: string;
+  goal: MeetingGoal;
+  agentIds: string[];
+  rounds: number;
+  status: 'gathering' | 'talking' | 'writing' | 'done' | 'failed' | 'cancelled';
+  lines: MeetingLine[];
+  result: string;
+  taskIds: string[];
+  createdAt: number;
+  finishedAt: number | null;
 }

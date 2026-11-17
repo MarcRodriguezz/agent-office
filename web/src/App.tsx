@@ -8,6 +8,7 @@ import { AgentPanel } from './ui/AgentPanel';
 import { Architect } from './ui/Architect';
 import { AlbumModal, DialogBox, StarterModal } from './ui/Companions';
 import { Feed, Roster, Toasts, TopBar } from './ui/Hud';
+import { MeetingsModal } from './ui/MeetingsModal';
 import { OfficesModal } from './ui/OfficesModal';
 import { PeopleModal } from './ui/PeopleModal';
 import { ProjectsModal } from './ui/ProjectsModal';
@@ -69,6 +70,7 @@ export function App() {
       {modal?.kind === 'agent' && <AgentEditor key={modal.id ?? 'new'} id={modal.id} teamId={modal.teamId} />}
       {modal?.kind === 'tasks' && <TasksModal taskId={modal.taskId} />}
       {modal?.kind === 'projects' && <ProjectsModal projectId={modal.projectId} />}
+      {modal?.kind === 'meetings' && <MeetingsModal meetingId={modal.meetingId} />}
     </div>
   );
 }

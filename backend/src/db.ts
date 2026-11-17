@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomCompanion } from './companions.js';
 import type {
-  Agent, Appearance, ChatMessage, Connection, FeedEvent, NodeRecord, PeerRecord, Project, Provider, RemoteTask, Task, Team, WorkSession,
+  Agent, Appearance, ChatMessage, Connection, FeedEvent, Meeting, NodeRecord, PeerRecord, Project, Provider, RemoteTask, Task, Team, WorkSession,
 } from './types.js';
 
 const file = process.env.DB_PATH ?? './data/office.db';
@@ -44,6 +44,7 @@ db.exec(`
     id TEXT PRIMARY KEY, agent_id TEXT, project_id TEXT, kind TEXT, node_id TEXT, cli_id TEXT, status TEXT, title TEXT,
     turns INTEGER, history TEXT, created_at INTEGER, last_used_at INTEGER
   );
+  CREATE TABLE IF NOT EXISTS meetings (id TEXT PRIMARY KEY, data TEXT, created_at INTEGER);
   CREATE TABLE IF NOT EXISTS remote_tasks (
     id TEXT PRIMARY KEY, peer_id TEXT, target_kind TEXT, target_id TEXT, target_name TEXT, title TEXT, description TEXT,
     status TEXT, result TEXT, created_at INTEGER, finished_at INTEGER
@@ -294,6 +295,18 @@ export const store = {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET status = excluded.status, result = excluded.result, finished_at = excluded.finished_at`)
       .run(t.id, t.peerId, t.targetKind, t.targetId, t.targetName, t.title, t.description, t.status, t.result, t.createdAt, t.finishedAt);
+  },
+
+  meetings(limit = 60): Meeting[] {
+    return (db.prepare('SELECT data FROM meetings ORDER BY created_at DESC LIMIT ?').all(limit) as Row[]).map((r) => JSON.parse(r.data));
+  },
+  saveMeeting(m: Meeting): Meeting {
+    db.prepare('INSERT INTO meetings (id, data, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data')
+      .run(m.id, JSON.stringify(m), m.createdAt);
+    return m;
+  },
+  deleteMeeting(id: string) {
+    db.prepare('DELETE FROM meetings WHERE id = ?').run(id);
   },
 
   setting<T>(key: string, fallback: T): T {

@@ -1,6 +1,6 @@
 export type Cell = [number, number];
 
-export type RoomKind = 'boss' | 'meeting' | 'server' | 'hr' | 'work' | 'cafe' | 'office' | 'lounge';
+export type RoomKind = 'boss' | 'meeting' | 'server' | 'hr' | 'work' | 'cafe' | 'office' | 'lounge' | 'fun';
 
 export interface RoomDef {
   id: string;
@@ -29,7 +29,7 @@ export interface Furniture {
   w: number;
   h: number;
   block: boolean;
-  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices' | 'projects';
+  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices' | 'projects' | 'meeting' | 'party';
   label?: string;
   spot?: Cell;
 }
@@ -61,13 +61,14 @@ export const KINDS: Record<RoomKind, KindInfo> = {
   cafe: { label: 'Cafetería', floor: 'cafe', min: [8, 6], size: [11, 9], prefix: 'cafe' },
   lounge: { label: 'Sala de descanso', floor: 'carpet', min: [5, 5], size: [7, 6], prefix: 'lounge' },
   server: { label: 'Sala de servidores', floor: 'tech', min: [6, 4], size: [8, 6], prefix: 'server' },
+  fun: { label: 'Zona lúdica', floor: 'party', min: [8, 6], size: [14, 7], prefix: 'fun' },
 };
 
 const LIMITS = { minW: 30, maxW: 84, minH: 20, maxH: 52, rooms: 32 };
 
 export const DEFAULT_LAYOUT: Layout = {
   w: 44,
-  h: 26,
+  h: 34,
   rooms: [
     { id: 'boss', kind: 'boss', name: 'TU DESPACHO', x: 1, y: 1, w: 10, h: 8, teamId: null, agentId: null },
     { id: 'meeting', kind: 'meeting', name: 'SALA DE REUNIONES', x: 12, y: 1, w: 10, h: 8, teamId: null, agentId: null },
@@ -75,8 +76,13 @@ export const DEFAULT_LAYOUT: Layout = {
     { id: 'hr', kind: 'hr', name: 'RRHH · CONTRATACIÓN', x: 32, y: 1, w: 11, h: 8, teamId: null, agentId: null },
     { id: 'open', kind: 'work', name: 'ZONA DE TRABAJO', x: 1, y: 10, w: 30, h: 15, teamId: null, agentId: null },
     { id: 'cafe', kind: 'cafe', name: 'CAFETERÍA', x: 32, y: 10, w: 11, h: 15, teamId: null, agentId: null },
+    { id: 'lounge', kind: 'lounge', name: 'SALA DE DESCANSO', x: 1, y: 26, w: 12, h: 7, teamId: null, agentId: null },
+    { id: 'fun', kind: 'fun', name: 'ZONA LÚDICA', x: 14, y: 26, w: 29, h: 7, teamId: null, agentId: null },
   ],
-  doors: [[5, 9], [6, 9], [16, 9], [17, 9], [26, 9], [27, 9], [33, 9], [34, 9], [31, 16], [31, 17], [31, 18]],
+  doors: [
+    [5, 9], [6, 9], [16, 9], [17, 9], [26, 9], [27, 9], [33, 9], [34, 9], [31, 16], [31, 17], [31, 18],
+    [6, 25], [7, 25], [21, 25], [22, 25], [37, 25], [38, 25], [13, 29],
+  ],
 };
 
 interface Compiled {
@@ -91,6 +97,7 @@ interface Compiled {
   bossSeat: Cell;
   bossVisitors: Cell[];
   meetingSeats: Cell[];
+  dance: Cell[];
   entrance: Cell;
   coffee: Cell[];
   hangouts: Cell[];
@@ -138,6 +145,7 @@ function compile(layout: Layout): Compiled {
   const keys: Compiled['keys'] = [];
   const bossVisitors: Cell[] = [];
   const meetingSeats: Cell[] = [];
+  const dance: Cell[] = [];
   const coffee: Cell[] = [];
   const hangouts: Cell[] = [];
   let bossSeat: Cell = [1, 1];
@@ -200,7 +208,7 @@ function compile(layout: Layout): Compiled {
       const ty = y + Math.floor((h - 2) / 2);
       const bx = x + Math.floor((w - 4) / 2);
       put(`${p}-board`, 'whiteboard', bx, y, 4, 1, { interact: 'tasks', label: 'Tablón de tareas', spot: [bx + 1, y + 1] });
-      put(`${p}-table`, 'table', tx, ty, tw, 2);
+      put(first ? 'meet-table' : `${p}-table`, 'table', tx, ty, tw, 2, { interact: 'meeting', label: 'Mesa de reuniones · Convocar', spot: [bx + 3, y + 1] });
       const seats: Cell[] = [];
       const cols = Array.from({ length: tw }, (_, i) => i).filter((i) => i % 2 === 0).sort((a, b) => Math.abs(a - tw / 2 + 1) - Math.abs(b - tw / 2 + 1));
       for (const col of cols) seats.push([tx + col, ty - 1], [tx + col, ty + 2]);
@@ -254,6 +262,34 @@ function compile(layout: Layout): Compiled {
       if (h >= 13) decor('table2', 'roundtable', x + w - 4, y + 10, 2, 2);
       if (h >= 8) decor('sofa', 'sofa', x + w - 1, y + 4, 1, 3);
       decor('plant', 'plant', x + w - 1, y + h - 1);
+    } else if (r.kind === 'fun') {
+      const dw = Math.min(8, w - 4);
+      const dh = Math.min(4, h - 3);
+      const wide = w >= 18;
+      const dx = wide ? x + 2 : x + Math.floor((w - dw) / 2);
+      const dy = y + 2;
+      const jx = dx + Math.floor(dw / 2) - 1;
+      put(first ? 'jukebox' : `${p}-jukebox`, 'jukebox', jx, y, 2, 1, { interact: 'party', label: 'Tocadiscos · ¡A celebrar!', spot: [jx, y + 1] });
+      decor('speaker1', 'speaker', dx, y);
+      decor('speaker2', 'speaker', dx + dw - 1, y);
+      put(`${p}-floor`, 'dancefloor', dx, dy, dw, dh, { block: false });
+      if (!dance.length) {
+        for (let cy = dy; cy < dy + dh; cy++) {
+          for (let cx = dx; cx < dx + dw; cx++) if (!blocked[idx(cx, cy)] && !reserved[idx(cx, cy)]) dance.push([cx, cy]);
+        }
+      }
+      if (wide) {
+        decor('arcade1', 'arcade', x + w - 1, y);
+        decor('arcade2', 'arcade', x + w - 2, y);
+        decor('arcade3', 'arcade', x + w - 3, y);
+        decor('pingpong', 'pingpong', dx + dw + 3, y + 2, 3, 2);
+        decor('beanbag1', 'beanbag', x + w - 1, y + h - 1);
+        decor('beanbag2', 'beanbag', x + w - 3, y + h - 1);
+      } else {
+        decor('arcade1', 'arcade', x, y + 2);
+        decor('beanbag1', 'beanbag', x + w - 1, y + 3);
+      }
+      decor('plant', 'plant', x, y + h - 1);
     } else {
       decor('sofa', 'sofa', x, y + 1, 1, 3);
       put(`${p}-rug`, 'rug2', x + 1, y + 1, Math.min(5, w - 2), Math.min(3, h - 2), { block: false });
@@ -272,16 +308,17 @@ function compile(layout: Layout): Compiled {
       }
     }
     if (!keys.some((k) => k.room === ri) && open.length) keys.push({ room: ri, cell: open[0] });
-    const count = r.kind === 'cafe' ? 4 : r.kind === 'work' || r.kind === 'lounge' ? 3 : 0;
+    const count = r.kind === 'cafe' ? 4 : r.kind === 'work' || r.kind === 'lounge' || r.kind === 'fun' ? 3 : 0;
     for (let k = 0; k < count && open.length; k++) hangouts.push(open[Math.floor((open.length * (k * 2 + 1)) / (count * 2))]);
   });
   if (!coffee.length) coffee.push(...(hangouts.length ? hangouts : [entrance]));
   if (!hangouts.length) hangouts.push(entrance);
+  if (!dance.length) dance.push(...hangouts);
   if (!meetingSeats.length) meetingSeats.push(entrance);
   if (!bossVisitors.length) bossVisitors.push(entrance);
 
   return {
-    layout: { ...layout, doors }, w: W, h: H, wall, blocked, roomAt, furniture, desks, bossSeat, bossVisitors, meetingSeats, entrance, coffee,
+    layout: { ...layout, doors }, w: W, h: H, wall, blocked, roomAt, furniture, desks, bossSeat, bossVisitors, meetingSeats, dance, entrance, coffee,
     hangouts, keys,
   };
 }
@@ -415,6 +452,25 @@ export function loadLayout(saved: unknown) {
     map = check(clean(saved), 0);
   } catch (err) {
     console.error('distribución guardada no válida, se usa la de serie:', (err as Error).message);
+  }
+}
+
+export function addFunRoom(): Layout | null {
+  const layout = map.layout;
+  if (layout.rooms.some((r) => r.kind === 'fun')) return null;
+  const bottom = Math.max(...layout.rooms.map((r) => r.y + r.h));
+  const base = layout.rooms.filter((r) => r.y + r.h === bottom).sort((a, b) => b.w - a.w)[0];
+  const [, minH] = KINDS.fun.min;
+  const h = 7;
+  if (!base || bottom + 1 + h + 1 > LIMITS.maxH || base.w < KINDS.fun.min[0]) return null;
+  const room: RoomDef = {
+    id: 'fun', kind: 'fun', name: 'ZONA LÚDICA', x: base.x, y: bottom + 1, w: Math.min(base.w, 29), h: Math.max(minH, h), teamId: null, agentId: null,
+  };
+  try {
+    map = check({ ...layout, h: Math.max(layout.h, room.y + room.h + 1), rooms: [...layout.rooms, room] }, 0);
+    return map.layout;
+  } catch {
+    return null;
   }
 }
 

@@ -4,13 +4,14 @@ import { api, saveLayout } from '../net';
 import { setState, toast, useStore } from '../store';
 import type { Room, RoomKind, Team } from '../types';
 
-const ADDABLE: RoomKind[] = ['work', 'office', 'meeting', 'cafe', 'lounge', 'server'];
+const ADDABLE: RoomKind[] = ['work', 'office', 'meeting', 'cafe', 'lounge', 'fun', 'server'];
 const NOTE: Record<RoomKind, string> = {
   work: 'Mesas para un departamento. Cuanto más grande, más mesas.',
   office: 'Una mesa aparte, para una persona concreta o libre.',
   meeting: 'Mesa de reuniones y tablón de tareas.',
   cafe: 'Barra de café y mesas para los descansos.',
   lounge: 'Sofás para que la gente se despeje.',
+  fun: 'Pista de baile, tocadiscos y recreativas: aquí se celebra.',
   server: 'Consola para configurar los proveedores LLM.',
   boss: '',
   hr: '',

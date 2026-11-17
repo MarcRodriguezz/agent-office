@@ -129,7 +129,7 @@ export interface FeedEvent {
   createdAt: number;
 }
 
-export type Intent = 'chat' | 'task' | 'plan' | 'synth' | 'test';
+export type Intent = 'chat' | 'task' | 'plan' | 'synth' | 'test' | 'meeting' | 'minutes';
 
 export interface LlmMessage {
   role: 'user' | 'assistant';
@@ -235,4 +235,29 @@ export interface Visitor {
   appearance: Appearance;
   companion: Companion | null;
   xp: number;
+}
+
+export type MeetingGoal = 'discuss' | 'spec';
+export type MeetingStatus = 'gathering' | 'talking' | 'writing' | 'done' | 'failed' | 'cancelled';
+
+export interface MeetingLine {
+  id: string;
+  speaker: string | null;
+  text: string;
+  at: number;
+}
+
+export interface Meeting {
+  id: string;
+  title: string;
+  brief: string;
+  goal: MeetingGoal;
+  agentIds: string[];
+  rounds: number;
+  status: MeetingStatus;
+  lines: MeetingLine[];
+  result: string;
+  taskIds: string[];
+  createdAt: number;
+  finishedAt: number | null;
 }

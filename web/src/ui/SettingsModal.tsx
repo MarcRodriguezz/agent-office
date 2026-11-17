@@ -311,7 +311,7 @@ function Profile() {
   );
 }
 
-const INTENT: Record<string, string> = { chat: 'Conversación', task: 'Tarea', plan: 'Reparto', synth: 'Síntesis', test: 'Prueba' };
+const INTENT: Record<string, string> = { chat: 'Conversación', task: 'Tarea', plan: 'Reparto', synth: 'Síntesis', test: 'Prueba', meeting: 'Reunión', minutes: 'Acta' };
 
 function Jobs() {
   const jobs = useStore((s) => s.jobs);

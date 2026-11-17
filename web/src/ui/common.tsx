@@ -99,7 +99,7 @@ export const TASK_STATUS: Record<Task['status'], { label: string; cls: string }>
 
 export const STATUS_LABEL: Record<string, string> = {
   idle: 'En su mesa', walking: 'Caminando', working: 'Trabajando', thinking: 'Pensando', talking: 'En reunión',
-  visiting: 'Contigo', waiting: 'Esperando a su equipo', break: 'De descanso',
+  visiting: 'Contigo', waiting: 'Esperando a su equipo', break: 'De descanso', dancing: 'De fiesta',
 };
 
 export const timeAgo = (ts: number) => {

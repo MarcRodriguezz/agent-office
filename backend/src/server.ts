@@ -2,10 +2,11 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import { store } from './db.js';
 import { hub } from './hub.js';
-import { loadLayout } from './map.js';
+import { addFunRoom, loadLayout } from './map.js';
 import { seed } from './seed.js';
 import { snapshot, startSim } from './sim.js';
 import { initOffice } from './brain.js';
+import { closeStaleMeetings } from './meetings.js';
 import { attachNode, dropClient, LOCAL, nodeByToken } from './nodes.js';
 import { acceptOffice, startOffices } from './offices.js';
 import { clientMessage, registerRoutes } from './routes.js';
@@ -13,7 +14,13 @@ import { settings } from './settings.js';
 
 seed();
 loadLayout(store.setting('layout', null));
+if (store.setting('layout', null) && !store.setting('funRoomOffered', false)) {
+  const layout = addFunRoom();
+  if (layout) store.setSetting('layout', layout);
+  store.setSetting('funRoomOffered', true);
+}
 store.failUnfinishedTasks();
+closeStaleMeetings();
 initOffice();
 startSim();
 startOffices();

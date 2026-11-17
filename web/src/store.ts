@@ -1,12 +1,13 @@
 import { useSyncExternalStore } from 'react';
 import type {
-  ActorSnap, Agent, Appearance, ChatMessage, Companion, Connection, FeedEvent, HubOffice, JobsState, MapData, NodeState, OfficesState, Project, Provider,
+  ActorSnap, Agent, Appearance, ChatMessage, Companion, Connection, FeedEvent, HubOffice, JobsState, MapData, Meeting, NodeState, OfficesState, Project, Provider,
   Settings, StaffTemplate, Task, Team, ToolDef, Visitor, WorkSession,
 } from './types';
 
 export type Modal =
   | { kind: 'settings'; tab?: 'providers' | 'tools' | 'nodes' | 'profile' | 'jobs' }
   | { kind: 'projects'; projectId?: string }
+  | { kind: 'meetings'; meetingId?: string }
   | { kind: 'offices'; tab?: 'mine' | 'work' | 'outside' }
   | { kind: 'people' }
   | { kind: 'album' }
@@ -46,6 +47,8 @@ export interface State {
   connections: Connection[];
   sessions: WorkSession[];
   tools: ToolDef[];
+  meetings: Meeting[];
+  party: number;
   officeId: string;
   architect: boolean;
   roomId: string | null;
@@ -99,6 +102,8 @@ let state: State = {
   connections: [],
   sessions: [],
   tools: [],
+  meetings: [],
+  party: 0,
   officeId: '',
   architect: false,
   roomId: null,

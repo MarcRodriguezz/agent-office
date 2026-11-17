@@ -12,6 +12,7 @@ const tables = {
   connections: new Map<string, any>(),
   sessions: new Map<string, any>(),
   tasks: new Map<string, any>(),
+  meetings: new Map<string, any>(),
 };
 const messages: any[] = [];
 const feed: any[] = [];
@@ -131,6 +132,15 @@ export const store = {
   remoteTasks: () => all(tables.remoteTasks).reverse(),
   saveRemoteTask(t: any) {
     tables.remoteTasks.set(t.id, copy(t));
+  },
+
+  meetings: (limit = 60) => all(tables.meetings).sort((a: any, b: any) => b.createdAt - a.createdAt).slice(0, limit),
+  saveMeeting(m: any) {
+    tables.meetings.set(m.id, copy(m));
+    return m;
+  },
+  deleteMeeting(id: string) {
+    tables.meetings.delete(id);
   },
 
   setting<T>(key: string, fallback: T): T {

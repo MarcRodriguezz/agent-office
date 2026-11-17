@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { go, refreshHub, selectAgent, switchOffice } from '../net';
+import { celebrate, go, refreshHub, selectAgent, switchOffice } from '../net';
 import { setState, useStore, world } from '../store';
 import type { Agent } from '../types';
 import { levelOf } from '../game/creature';
@@ -72,6 +72,8 @@ export function TopBar() {
   const running = jobs.active + jobs.waiting;
   const liveSessions = useStore((s) => new Set(s.sessions.filter((x) => x.status === 'open' && x.turns > 0).map((x) => x.projectId)).size);
   const linked = useStore((s) => s.offices.peers.filter((p) => p.online).length);
+  const meeting = useStore((s) => s.meetings.some((m) => ['gathering', 'talking', 'writing'].includes(m.status)));
+  const partying = useStore((s) => s.party > 0);
   const openTasks = useStore((s) => s.tasks.filter((t) => !t.parentId && (t.status === 'working' || t.status === 'delegating' || t.status === 'queued')).length);
   return (
     <div className="topbar">
@@ -85,6 +87,13 @@ export function TopBar() {
         </button>
         <button onClick={() => { void go({ kind: 'spot', id: 'archive' }); setState({ modal: { kind: 'projects' } }); }}>
           Proyectos {liveSessions > 0 && <span className="badge">{liveSessions}</span>}
+        </button>
+        <button onClick={() => { void go({ kind: 'spot', id: 'meet-table' }); setState({ modal: { kind: 'meetings' } }); }}>
+          Reuniones {meeting && <span className="badge">1</span>}
+        </button>
+        <button className={partying ? 'on' : ''} disabled={partying} onClick={() => void celebrate()}
+          title="Todo el mundo a la zona lúdica a bailar">
+          {partying ? 'De fiesta' : 'Celebrar'}
         </button>
         <button onClick={() => setState({ modal: { kind: 'album' } })}>Compis</button>
         <button onClick={() => setState({ modal: { kind: 'offices' } })}>

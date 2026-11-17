@@ -203,11 +203,14 @@ export interface PoseOptions {
   seated: boolean;
   time: number;
   seed: number;
+  dancing?: boolean;
 }
 
 export function drawCharacter(ctx: Ctx, fx: number, fy: number, ap: Appearance, o: PoseOptions) {
-  const walk = o.moving ? Math.sin(o.time * 13 + o.seed) : 0;
-  const bob = o.moving ? Math.abs(walk) * 1.6 : Math.sin(o.time * 2.2 + o.seed) * 0.5;
+  const beat = o.time * 7.5 + o.seed;
+  const dance = !!o.dancing && !o.moving && !o.seated;
+  const walk = o.moving ? Math.sin(o.time * 13 + o.seed) : dance ? Math.sin(beat) : 0;
+  const bob = o.moving ? Math.abs(walk) * 1.6 : dance ? Math.abs(Math.sin(beat)) * 5 : Math.sin(o.time * 2.2 + o.seed) * 0.5;
   const blink = (o.time + o.seed * 3) % 4.2 < 0.13;
 
   if (!o.seated) {
@@ -229,7 +232,16 @@ export function drawCharacter(ctx: Ctx, fx: number, fy: number, ap: Appearance, 
   const top = fy - 33 - bob;
   for (const side of [-1, 1]) {
     const swing = walk * side * 2.5;
+    const up = dance && Math.sin(beat * 0.5 + side * 1.4) > -0.2;
     ctx.fillStyle = shade(ap.shirt, -22);
+    if (up) {
+      const reach = Math.sin(beat + side) * 3;
+      roundRect(ctx, fx + (side < 0 ? -17 : 11.5) + reach * side * 0.4, top - 12 + reach, 5.5, 16, 2.5);
+      ctx.fill();
+      ctx.fillStyle = ap.skin;
+      circle(ctx, fx + side * 14.3 + reach * side * 0.4, top - 13 + reach, 2.8);
+      continue;
+    }
     roundRect(ctx, fx + (side < 0 ? -16 : 11), top + 3 + swing, 5.5, 15, 2.5);
     ctx.fill();
     ctx.fillStyle = ap.skin;

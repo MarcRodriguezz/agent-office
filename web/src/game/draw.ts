@@ -14,6 +14,7 @@ const FLOORS: Record<string, [string, string]> = {
   tile: ['#e9e4dc', '#dfd9cf'],
   office: ['#d8d3c9', '#d1ccc1'],
   cafe: ['#e9cda6', '#dfbe92'],
+  party: ['#3d3552', '#362f4a'],
 };
 
 const isWall = (map: MapData, x: number, y: number) =>
@@ -57,7 +58,7 @@ export function buildFloor(map: MapData, teamColor: (id: string | null) => strin
         ctx.fillRect(x0, y0 + j * 24, w, 1);
         for (let x = (j % 3) * 40 + 30; x < w; x += 120) ctx.fillRect(x0 + x, y0 + j * 24, 1, 24);
       }
-    } else if (room.floor === 'tile' || room.floor === 'cafe') {
+    } else if (room.floor === 'tile' || room.floor === 'cafe' || room.floor === 'party') {
       ctx.fillStyle = b;
       for (let j = 0; j < room.h; j++) for (let i = 0; i < room.w; i++) if ((i + j) % 2) ctx.fillRect(x0 + i * T, y0 + j * T, T, T);
     } else {
@@ -77,7 +78,7 @@ export function buildFloor(map: MapData, teamColor: (id: string | null) => strin
       ctx.globalAlpha = 1;
     }
     ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
-    ctx.fillStyle = room.floor === 'tech' ? 'rgba(255, 255, 255, 0.32)' : 'rgba(40, 30, 20, 0.3)';
+    ctx.fillStyle = room.floor === 'tech' || room.floor === 'party' ? 'rgba(255, 255, 255, 0.32)' : 'rgba(40, 30, 20, 0.3)';
     ctx.save();
     ctx.translate(x0 + 12, y0 + h - (band ? 16 : 12));
     [...room.name].forEach((ch, i) => ctx.fillText(ch, i * 9.5, 0));
@@ -443,6 +444,70 @@ export function drawFurniture(ctx: Ctx, f: Furniture, info: FurnitureInfo) {
       ctx.fillRect(px + pw - 14, py, 5, 10);
       break;
     }
+    case 'jukebox': {
+      box(ctx, px + 6, py + 10, pw - 12, ph - 16, 46, '#7a3b5e', '#4e2340', 14);
+      ctx.fillStyle = '#2a1626';
+      roundRect(ctx, px + 14, py - 28, pw - 28, 22, 10);
+      ctx.fill();
+      for (let i = 0; i < 6; i++) {
+        const on = Math.sin(time * 5 + i) > 0;
+        ctx.fillStyle = on ? ['#ffd76a', '#ff7eb6', '#7df9c8'][i % 3] : '#5b3a52';
+        roundRect(ctx, px + 20 + i * ((pw - 44) / 5), py - 2, 6, 14, 3);
+        ctx.fill();
+      }
+      dot(ctx, cx, py - 17, 7, '#1a1c22');
+      dot(ctx, cx, py - 17, 2.5, '#e8590c');
+      break;
+    }
+    case 'speaker': {
+      box(ctx, px + 10, py + 12, pw - 20, ph - 18, 40, '#2b2f3a', '#1a1c22', 4);
+      const pump = 1 + Math.max(0, Math.sin(time * 9)) * 0.12;
+      dot(ctx, cx, py - 18, 8 * pump, '#444b5c');
+      dot(ctx, cx, py - 18, 3.5, '#1a1c22');
+      dot(ctx, cx, py + 2, 10 * pump, '#444b5c');
+      dot(ctx, cx, py + 2, 4, '#1a1c22');
+      break;
+    }
+    case 'arcade': {
+      box(ctx, px + 6, py + 10, pw - 12, ph - 16, 50, '#3b4fa8', '#26357a', 4);
+      ctx.fillStyle = '#12151c';
+      ctx.fillRect(px + 11, py - 30, pw - 22, 22);
+      const hue = Math.floor(time * 2 + f.x) % 3;
+      ctx.fillStyle = ['#7df9c8', '#ffd76a', '#ff7eb6'][hue];
+      ctx.fillRect(px + 15 + ((time * 14 + f.x * 5) % (pw - 34)), py - 22, 6, 6);
+      ctx.fillStyle = '#e25555';
+      dot(ctx, px + 17, py - 1, 3, '#e25555');
+      dot(ctx, px + pw - 17, py - 1, 3, '#ffd76a');
+      ctx.fillStyle = '#ffd76a';
+      ctx.fillRect(px + 9, py - 40, pw - 18, 6);
+      break;
+    }
+    case 'pingpong': {
+      box(ctx, px + 4, py + 8, pw - 8, ph - 14, 18, '#2f7d5b', '#1f5a41', 3);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px + 6, py - 10 + (ph - 14) / 2, pw - 12, 1.5);
+      ctx.fillRect(cx - 1, py - 10, 2, ph - 14);
+      ctx.fillStyle = '#d5d0c6';
+      ctx.fillRect(cx - 2, py - 16, 4, ph - 6);
+      const ball = (Math.sin(time * 3) + 1) / 2;
+      dot(ctx, px + 16 + ball * (pw - 32), py + 4 - Math.abs(Math.sin(time * 6)) * 14, 3, '#ff9f43');
+      break;
+    }
+    case 'beanbag': {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+      ctx.beginPath();
+      ctx.ellipse(cx, py + ph - 8, 18, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = (f.x + f.y) % 2 ? '#e0668a' : '#f2c14e';
+      ctx.beginPath();
+      ctx.ellipse(cx, py + ph - 18, 18, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.beginPath();
+      ctx.ellipse(cx - 5, py + ph - 24, 7, 4, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
     case 'roundtable': {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
       ctx.beginPath();
@@ -467,7 +532,7 @@ export function drawFurniture(ctx: Ctx, f: Furniture, info: FurnitureInfo) {
   }
 }
 
-export const INTERACT_ICON: Record<string, string> = { llm: '⚙️', hire: '🧑‍💼', tasks: '📋', coffee: '☕', offices: '🌐', projects: '🗂️' };
+export const INTERACT_ICON: Record<string, string> = { llm: '⚙️', hire: '🧑‍💼', tasks: '📋', coffee: '☕', offices: '🌐', projects: '🗂️', meeting: '🗣️', party: '🎉' };
 
 export function wrapText(ctx: Ctx, text: string, maxWidth: number, maxLines = 5): string[] {
   const lines: string[] = [];
@@ -487,4 +552,69 @@ export function wrapText(ctx: Ctx, text: string, maxWidth: number, maxLines = 5)
     lines[maxLines - 1] = `${lines[maxLines - 1].replace(/.{0,2}$/, '')}…`;
   }
   return lines;
+}
+
+const DANCE = ['#ff7eb6', '#7df9c8', '#ffd76a', '#9ad7ff', '#c49bff'];
+
+export function drawDanceFloor(ctx: Ctx, f: Furniture, time: number, on: boolean) {
+  const step = Math.floor(time * (on ? 3 : 0.6));
+  for (let j = 0; j < f.h; j++) {
+    for (let i = 0; i < f.w; i++) {
+      const x = (f.x + i) * T;
+      const y = (f.y + j) * T;
+      const color = DANCE[(i * 3 + j * 2 + step) % DANCE.length];
+      ctx.fillStyle = '#231e30';
+      ctx.fillRect(x + 1, y + 1, T - 2, T - 2);
+      ctx.globalAlpha = on ? 0.55 + 0.25 * Math.sin(time * 6 + i + j) : 0.16;
+      ctx.fillStyle = color;
+      ctx.fillRect(x + 3, y + 3, T - 6, T - 6);
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+export function drawDiscoBall(ctx: Ctx, f: Furniture, time: number, on: boolean) {
+  const cx = (f.x + f.w / 2) * T;
+  const cy = (f.y + 0.9) * T - 40;
+  if (on) {
+    for (let i = 0; i < 6; i++) {
+      const a = time * 0.9 + (i / 6) * Math.PI * 2;
+      const tx = cx + Math.cos(a) * f.w * T * 0.45;
+      const ty = (f.y + f.h / 2) * T + Math.sin(a) * f.h * T * 0.4;
+      ctx.fillStyle = DANCE[i % DANCE.length];
+      ctx.globalAlpha = 0.12;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(tx - 22, ty);
+      ctx.lineTo(tx + 22, ty);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.ellipse(tx, ty, 22, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = '#8a8f99';
+  ctx.fillRect(cx - 1, cy - 30, 2, 20);
+  dot(ctx, cx, cy, 12, '#cfd6de');
+  for (let i = 0; i < 8; i++) {
+    const a = time * (on ? 2 : 0.4) + i * 0.8;
+    dot(ctx, cx + Math.cos(a) * 7, cy + Math.sin(i * 1.7) * 7, 2, i % 2 ? '#ffffff' : '#9aa3b2');
+  }
+}
+
+export function drawConfetti(ctx: Ctx, x: number, y: number, w: number, h: number, time: number) {
+  for (let i = 0; i < 70; i++) {
+    const speed = 40 + (i % 7) * 12;
+    const px = x + ((i * 137.5 + Math.sin(time + i) * 18) % w + w) % w;
+    const py = y + ((i * 61 + time * speed) % h);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(time * 3 + i);
+    ctx.fillStyle = DANCE[i % DANCE.length];
+    ctx.fillRect(-3, -1.5, 6, 3);
+    ctx.restore();
+  }
 }

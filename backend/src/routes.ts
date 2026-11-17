@@ -23,6 +23,8 @@ import {
   reopenSession, sessionList,
 } from './sessions.js';
 import { BIN, ENV_KEY, TOOLS, toolOf } from './tools.js';
+import { cancelMeeting, finishMeeting, forgetMeeting, interject, meetingList, meetingTasks, startMeeting } from './meetings.js';
+import { partyUntil, startParty } from './party.js';
 import type { Access, Provider, ProviderKind } from './types.js';
 
 const KINDS: ProviderKind[] = ['mock', 'anthropic', 'openai', 'claude-code', 'codex', 'cli'];
@@ -78,6 +80,8 @@ export function registerRoutes(app: FastifyInstance) {
     connections: store.connections().map(publicConnection),
     sessions: sessionList(),
     tools: TOOLS,
+    meetings: meetingList(),
+    party: partyUntil(),
   }));
 
   app.get('/api/summary', async () => officeSummary());
@@ -251,6 +255,51 @@ export function registerRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/agents/:id/messages', async (req) => store.messages((req.params as { id: string }).id));
+
+  app.post('/api/meetings', async (req, reply) => {
+    const b = req.body as any;
+    if (!text(b.title, 200)) return reply.code(400).send({ error: 'La reunión necesita un tema.' });
+    try {
+      return startMeeting({
+        title: text(b.title, 200), brief: text(b.brief, 6000), goal: b.goal === 'spec' ? 'spec' : 'discuss',
+        agentIds: Array.isArray(b.agentIds) ? b.agentIds.filter((id: unknown): id is string => typeof id === 'string') : [],
+        rounds: Number(b.rounds) || 1,
+      });
+    } catch (err) {
+      return reply.code(409).send({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/meetings/:id/say', async (req, reply) => {
+    const line = interject((req.params as { id: string }).id, text((req.body as any).text, 2000));
+    if (!line) return reply.code(409).send({ error: 'Esta reunión ya no admite intervenciones.' });
+    return line;
+  });
+
+  app.post('/api/meetings/:id/finish', async (req, reply) => {
+    if (!finishMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: 'Esta reunión ya está terminando.' });
+    return { ok: true };
+  });
+
+  app.post('/api/meetings/:id/cancel', async (req, reply) => {
+    if (!cancelMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: 'Esta reunión no está en curso.' });
+    return { ok: true };
+  });
+
+  app.post('/api/meetings/:id/tasks', async (req, reply) => {
+    try {
+      return await meetingTasks((req.params as { id: string }).id);
+    } catch (err) {
+      return reply.code(409).send({ error: (err as Error).message });
+    }
+  });
+
+  app.delete('/api/meetings/:id', async (req, reply) => {
+    if (!forgetMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: 'No se puede borrar una reunión en curso.' });
+    return { ok: true };
+  });
+
+  app.post('/api/party', async () => ({ until: startParty() }));
 
   app.post('/api/agents/:id/chat', async (req, reply) => {
     const message = chat((req.params as { id: string }).id, text((req.body as any).text, 8000));

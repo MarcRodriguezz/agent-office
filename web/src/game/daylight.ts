@@ -18,6 +18,9 @@ const LIGHTS: Record<string, { radius: number; color: string }> = {
   reception: { radius: 2.6, color: '255, 214, 150' },
   whiteboard: { radius: 2.2, color: '230, 236, 255' },
   globe: { radius: 1.8, color: '140, 200, 255' },
+  jukebox: { radius: 2.6, color: '255, 126, 182' },
+  arcade: { radius: 1.6, color: '125, 249, 200' },
+  dancefloor: { radius: 3.2, color: '196, 155, 255' },
 };
 
 const override = (() => {

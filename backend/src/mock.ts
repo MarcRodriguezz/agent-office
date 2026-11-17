@@ -32,6 +32,25 @@ export async function mock(job: LlmJob): Promise<string> {
         '',
         '_Este texto lo genera el cerebro simulado. Configura un proveedor LLM en tu despacho o en la sala de servidores para obtener trabajo real._',
       ].join('\n');
+    case 'meeting': {
+      const lines = [
+        'Desde mi lado propongo empezar por lo mínimo que aporte valor y medirlo antes de ampliar.',
+        'Estoy de acuerdo con lo dicho, pero añadiría una fecha de revisión para no perder el foco.',
+        'Veo un riesgo: no tenemos claro quién valida el resultado. Propongo que lo decidamos hoy.',
+        'Me encargo de mi parte si cerramos el alcance. Necesitaría un par de días para tener una primera versión.',
+        'Yo separaría lo imprescindible de lo deseable y dejaría lo segundo para una segunda fase.',
+        'Coincido. Dejemos por escrito los criterios de aceptación para que nadie trabaje a ciegas.',
+      ];
+      const said = (last.match(/\n\n[^\n:]+: /g) ?? []).length;
+      return `${lines[(said + job.agentName.length) % lines.length]} (respuesta simulada)`;
+    }
+    case 'minutes': {
+      const spec = /especificación/i.test(job.messages[job.messages.length - 1]?.content.split('Has moderado')[1] ?? '');
+      return (spec
+        ? ['## Objetivo', 'Lo que se ha planteado en la reunión, acotado a una primera versión.', '', '## Alcance', '- Primera fase: lo imprescindible.', '- Segunda fase: lo deseable.', '', '## Requisitos', '- Criterios de aceptación por escrito antes de empezar.', '', '## Decisiones técnicas', '- Pendiente de concretar con un modelo real.', '', '## Riesgos y dudas abiertas', '- Quién valida el resultado.', '', '## Reparto del trabajo', '- Cada participante se encarga de su especialidad.']
+        : ['## Resumen', 'El equipo ha debatido el tema y está de acuerdo en empezar por lo mínimo.', '', '## Decisiones', '- Separar lo imprescindible de lo deseable.', '- Fijar una fecha de revisión.', '', '## Siguientes pasos', '- Cada participante prepara su parte.', '', '## Temas abiertos', '- Quién valida el resultado.']
+      ).concat('', `_Acta simulada redactada por ${job.agentName}. Conecta un modelo real para reuniones de verdad._`).join('\n');
+    }
     case 'synth':
       return [
         `**Resumen del equipo (modo simulado)** — coordinado por ${job.agentName}`,

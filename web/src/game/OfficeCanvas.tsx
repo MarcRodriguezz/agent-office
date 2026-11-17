@@ -1,16 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { getState, setState, world, type RenderActor } from '../store';
-import { go, sayAsPlayer, selectAgent, step } from '../net';
+import { celebrate, go, sayAsPlayer, selectAgent, step } from '../net';
 import type { Furniture, MapData } from '../types';
 import { createArchitect } from './architect';
 import { DEFAULT_APPEARANCE, drawCharacter, roundRect } from './character';
 import { drawCreature, levelOf, stageOf } from './creature';
 import { daylight, lampsOf, paintGlow, paintNight, type Lamp } from './daylight';
-import { INTERACT_ICON, T, WALL_H, buildFloor, drawFurniture, drawWall, drawWindow, wallCells, wrapText } from './draw';
+import {
+  INTERACT_ICON, T, WALL_H, buildFloor, drawConfetti, drawDanceFloor, drawDiscoBall, drawFurniture, drawWall, drawWindow, wallCells, wrapText,
+} from './draw';
 
 const PANEL_W = 420;
 const ROSTER_W = 220;
-const STATUS_ICON: Record<string, string> = { working: '💻', waiting: '⏳', talking: '💬', break: '☕', visiting: '🙋' };
+const STATUS_ICON: Record<string, string> = { working: '💻', waiting: '⏳', talking: '💬', break: '☕', visiting: '🙋', dancing: '🎶' };
+const DANCE_TURN = ['down', 'left', 'down', 'right'] as const;
 const FONT = '"IBM Plex Sans", system-ui, sans-serif';
 
 interface View {
@@ -28,6 +31,8 @@ export function runInteraction(f: Furniture) {
   else if (f.interact === 'tasks') setState({ modal: { kind: 'tasks' } });
   else if (f.interact === 'offices') setState({ modal: { kind: 'offices' } });
   else if (f.interact === 'projects') setState({ modal: { kind: 'projects' } });
+  else if (f.interact === 'meeting') setState({ modal: { kind: 'meetings' } });
+  else if (f.interact === 'party') void celebrate();
   else if (f.interact === 'coffee') sayAsPlayer('☕ Mmm, café');
 }
 
@@ -315,6 +320,9 @@ export function OfficeCanvas() {
       roundRect(ctx, -14, -WALL_H - 14, mapW + 28, mapH + WALL_H + 28, 18);
       ctx.fill();
       ctx.drawImage(floor!, 0, 0);
+      const partying = state.party > 0;
+      const floors = map.furniture.filter((f) => f.type === 'dancefloor');
+      for (const f of floors) drawDanceFloor(ctx, f, time, partying);
 
       if (marker) {
         const age = (now - marker.at) / 600;
@@ -370,7 +378,8 @@ export function OfficeCanvas() {
         drawables.push({
           y: (a.ry + 0.5) * T + 14,
           draw: () => drawCharacter(ctx, fx, fy, appearance, {
-            facing: a.facing, moving: a.moving, seated: a.seated, time, seed: a.seed,
+            facing: a.status === 'dancing' && !a.moving ? DANCE_TURN[Math.floor(time * 1.6 + a.seed) % 4] : a.facing,
+            moving: a.moving, seated: a.seated, time, seed: a.seed, dancing: a.status === 'dancing',
           }),
         });
       }
@@ -400,6 +409,11 @@ export function OfficeCanvas() {
       if (light.dark > 0.01) {
         ctx.drawImage(nightLayer, -14, -WALL_H - 14, mapW + 28, mapH + WALL_H + 28);
         paintGlow(ctx, light, lamps);
+      }
+
+      for (const f of floors) drawDiscoBall(ctx, f, time, partying);
+      if (partying) {
+        for (const room of map.rooms) if (room.kind === 'fun') drawConfetti(ctx, room.x * T, room.y * T - WALL_H, room.w * T, room.h * T + WALL_H, time);
       }
 
       for (const f of map.furniture) {

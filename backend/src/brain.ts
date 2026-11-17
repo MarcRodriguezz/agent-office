@@ -4,7 +4,7 @@ import { store } from './db.js';
 import { hub } from './hub.js';
 import { complete } from './llm.js';
 import { deskSeat, deskVisitor, map, mapData, nearestWalkable, setLayout, walkable, type Cell, type Desk } from './map.js';
-import { addActor, cellOf, face, remap, removeActor, say, setStatus, walkTo, type Actor } from './sim.js';
+import { addActor, cellOf, face, remap, removeActor, say, setStatus, walkTo, type Actor, type Status } from './sim.js';
 import { staff, templateOf } from './seed.js';
 import { currentSession, recordTurn, workFor } from './sessions.js';
 import { publishSettings } from './settings.js';
@@ -45,7 +45,7 @@ const pick = <T>(items: T[]): T => items[Math.floor(Math.random() * items.length
 const sameCell = (a: Cell, b: Cell) => a[0] === b[0] && a[1] === b[1];
 const TASK_TAG = /\[\[\s*TAREA\s*:\s*([\s\S]+?)\]\]/i;
 
-function feed(text: string) {
+export function feed(text: string) {
   hub.broadcast({ type: 'feed', event: store.addFeed(text) });
 }
 
@@ -182,7 +182,7 @@ const CHAT_RULES = [
   'Para preguntas rápidas o charla, responde directamente y no uses esa etiqueta.',
 ].join('\n');
 
-async function ask(agent: Agent, intent: Intent, prompt: string, hint?: LlmJob['hint']): Promise<string> {
+export async function ask(agent: Agent, intent: Intent, prompt: string, hint?: LlmJob['hint']): Promise<string> {
   const result = await complete({
     provider: providerFor(agent), system: systemPrompt(agent), messages: [{ role: 'user', content: prompt }],
     intent, agentName: agent.name, hint, work: workFor(agent, null),
@@ -207,7 +207,7 @@ function think(rt: Runtime, intent: Intent, prompt: string, rules = ''): Promise
   return run;
 }
 
-function remember(agent: Agent, prompt: string, text: string) {
+export function remember(agent: Agent, prompt: string, text: string) {
   try {
     recordTurn(currentSession(agent, providerFor(agent)).id, prompt, { text });
   } catch {
@@ -233,7 +233,7 @@ function updateTask(task: Task, patch: Partial<Task>) {
   hub.broadcast({ type: 'task', task });
 }
 
-const titleOf = (text: string) => {
+export const titleOf = (text: string) => {
   const line = text.trim().split('\n')[0];
   return line.length > 70 ? `${line.slice(0, 67)}…` : line;
 };
@@ -313,7 +313,7 @@ function planPrompt(task: Task, reports: Agent[]): string {
   ].join('\n\n');
 }
 
-function parsePlan(raw: string, reports: Agent[]): PlanItem[] {
+export function parsePlan(raw: string, reports: Agent[]): PlanItem[] {
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
   if (start < 0 || end <= start) return [];
@@ -764,10 +764,12 @@ export function playerGo(target: GoTarget): Promise<boolean> {
   } else {
     cell = map.furniture.find((f) => f.id === target.id)?.spot ?? null;
   }
+  setStatus(player, 'idle');
   return cell ? walkTo(player, cell) : Promise.resolve(false);
 }
 
 export function playerStep(dx: number, dy: number) {
+  setStatus(player, 'idle');
   const at = cellOf(player);
   if (walkable(at[0] + dx, at[1] + dy)) void walkTo(player, [at[0] + dx, at[1] + dy]);
   else if (!player.moving) face(player, dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up');
@@ -775,6 +777,59 @@ export function playerStep(dx: number, dy: number) {
 
 export function playerSay(text: string) {
   say(player, text, 3000);
+}
+
+export async function playerDance(spot: Cell, until: number) {
+  setStatus(player, 'walking');
+  if (!(await walkTo(player, spot)) || Date.now() > until) return;
+  setStatus(player, 'dancing');
+  say(player, '¡Vamos!', 2500);
+  setTimeout(() => player.status === 'dancing' && setStatus(player, 'idle'), Math.max(0, until - Date.now()));
+}
+
+export const runtimeAgent = (id: string): Agent | undefined => runtimes.get(id)?.agent;
+export const presentIds = () => [...runtimes.keys()];
+
+export function speak(id: string, text: string, ms = 6000) {
+  const rt = runtimes.get(id);
+  if (rt) say(rt.actor, text, ms);
+  else if (id === 'player') say(player, text, ms);
+}
+
+export function gather(ids: string[], spots: Cell[], status: Status) {
+  let over = false;
+  let free = () => {};
+  const released = new Promise<void>((r) => (free = r));
+  const here = new Set<string>();
+  const arrivals = ids.map((id, i) => new Promise<void>((arrived) => {
+    const rt = runtimes.get(id);
+    if (!rt) return arrived();
+    void enqueue(rt, async () => {
+      if (over) return arrived();
+      setStatus(rt.actor, 'walking');
+      await walkTo(rt.actor, spots[i % spots.length]);
+      if (over) return arrived();
+      face(rt.actor, 'down');
+      setStatus(rt.actor, status);
+      here.add(id);
+      arrived();
+      await released;
+      here.delete(id);
+    }).catch(() => arrived());
+  }));
+  return {
+    arrived: Promise.all(arrivals).then(() => {}),
+    present: () => [...here],
+    release: () => {
+      over = true;
+      free();
+    },
+  };
+}
+
+export function startTaskFor(agentId: string, task: Task): Promise<Task> | null {
+  const rt = runtimes.get(agentId);
+  return rt ? startTask(rt, task) : null;
 }
 
 export function initOffice() {

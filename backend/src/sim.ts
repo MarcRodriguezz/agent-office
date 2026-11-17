@@ -2,7 +2,7 @@ import { hub } from './hub.js';
 import { findPath, map, nearestWalkable, walkable, type Cell } from './map.js';
 
 export type Facing = 'down' | 'up' | 'left' | 'right';
-export type Status = 'idle' | 'walking' | 'working' | 'thinking' | 'talking' | 'visiting' | 'waiting' | 'break';
+export type Status = 'idle' | 'walking' | 'working' | 'thinking' | 'talking' | 'visiting' | 'waiting' | 'break' | 'dancing';
 
 export interface Actor {
   id: string;

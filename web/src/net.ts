@@ -86,6 +86,19 @@ function handle(msg: any) {
     case 'connections':
       setState({ connections: msg.connections });
       break;
+    case 'meeting':
+      setState((s) => ({
+        meetings: s.meetings.some((m) => m.id === msg.meeting.id)
+          ? s.meetings.map((m) => (m.id === msg.meeting.id ? msg.meeting : m))
+          : [msg.meeting, ...s.meetings],
+      }));
+      break;
+    case 'meetings':
+      setState({ meetings: msg.meetings });
+      break;
+    case 'party':
+      setState({ party: msg.until });
+      break;
     case 'sessions':
       setState({ sessions: msg.sessions });
       break;
@@ -156,6 +169,7 @@ export async function bootstrap() {
     settings: data.settings, tasks: data.tasks, feed: data.feed, jobs: data.jobs,
     nodes: data.nodes, offices: data.offices, visitors: data.visitors, templates: data.templates ?? [],
     projects: data.projects ?? [], connections: data.connections ?? [], sessions: data.sessions ?? [], tools: data.tools ?? [],
+    meetings: data.meetings ?? [], party: data.party ?? 0,
   });
   connect();
 }
@@ -220,5 +234,13 @@ export async function selectAgent(id: string, walk = true) {
   if (!getState().messages[id]) {
     const list = await api<ChatMessage[]>('GET', `/agents/${id}/messages`).catch(() => []);
     setState((s) => ({ messages: { ...s.messages, [id]: list } }));
+  }
+}
+
+export async function celebrate() {
+  try {
+    await api('POST', '/party');
+  } catch (e) {
+    toast((e as Error).message, false);
   }
 }
