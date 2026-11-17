@@ -56,7 +56,7 @@ export function App() {
       {DEMO && !modal && (
         <div className="demobar">
           <b>Demo</b>
-          <span>Corre entera en tu navegador con respuestas simuladas y se reinicia al recargar. Para usar modelos reales, <a href="https://github.com/MarcRodriguezz/agent-office" target="_blank" rel="noreferrer">instálala con Docker</a>.</span>
+          <span>Corre entera en tu navegador con respuestas simuladas y se reinicia al recargar. <a href="https://github.com/MarcRodriguezz/agent-office" target="_blank" rel="noreferrer">Ver el código en GitHub</a>.</span>
         </div>
       )}
       <DialogBox />
