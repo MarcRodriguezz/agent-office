@@ -37,11 +37,64 @@ export interface Agent {
   model: string;
   teamId: string | null;
   nodeId: string | null;
+  projectId: string | null;
+  access: Access;
+  connections: string[];
   appearance: Appearance;
   companion: Companion;
   xp: number;
   desk: number;
   createdAt: number;
+}
+
+export type Access = 'read' | 'edit' | 'full';
+
+export interface Project {
+  id: string;
+  name: string;
+  folder: string;
+  description: string;
+  createdAt: number;
+}
+
+export interface Connection {
+  id: string;
+  name: string;
+  tool: string;
+  bin: string;
+  keys: string[];
+  createdAt: number;
+}
+
+export interface WorkSession {
+  id: string;
+  agentId: string;
+  projectId: string | null;
+  kind: ProviderKind;
+  nodeId: string | null;
+  cliId: string;
+  status: 'open' | 'closed';
+  title: string;
+  turns: number;
+  last: string;
+  createdAt: number;
+  lastUsedAt: number;
+}
+
+export type ToolAction = 'login' | 'logout' | 'install';
+
+export interface ToolDef {
+  id: string;
+  name: string;
+  bin: string;
+  summary: string;
+  npm?: string;
+  login?: { command: string; flow: 'code' | 'device' };
+  logout?: string;
+  status?: string;
+  fields: { key: string; label: string; optional?: boolean }[];
+  tokenUrl?: string;
+  brain?: boolean;
 }
 
 export interface Team {
@@ -179,7 +232,7 @@ export interface Furniture {
   w: number;
   h: number;
   block: boolean;
-  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices';
+  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices' | 'projects';
   label?: string;
   spot?: [number, number];
 }
@@ -209,16 +262,18 @@ export interface CliAuth {
   detail: string;
 }
 
+export interface ToolStatus extends CliAuth {
+  id: string;
+}
+
 export interface NodeState {
   id: string;
   name: string;
   local: boolean;
   online: boolean;
   active: number;
-  info: { host: string; concurrency: number; claude: CliAuth; codex: CliAuth } | null;
+  info: { host: string; concurrency: number; tools: ToolStatus[] } | null;
 }
-
-export type LoginAction = 'claude-login' | 'claude-logout' | 'codex-login' | 'codex-logout';
 
 export interface DirectoryAgent {
   id: string;

@@ -2,10 +2,10 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import { store } from './db.js';
 import { hub } from './hub.js';
-import type { LlmJob, LoginAction, NodeInfo } from './types.js';
+import { toolCommand, type ToolAction } from './tools.js';
+import type { LlmJob, LlmResult, NodeInfo } from './types.js';
 
 export const LOCAL = 'local';
-const ACTIONS: LoginAction[] = ['claude-login', 'claude-logout', 'codex-login', 'codex-logout'];
 
 interface Live {
   sockets: Set<WebSocket>;
@@ -15,7 +15,7 @@ interface Live {
 interface Pending {
   nodeId: string;
   socket: WebSocket;
-  resolve: (text: string) => void;
+  resolve: (result: LlmResult) => void;
   reject: (err: Error) => void;
   timer: NodeJS.Timeout;
 }
@@ -70,7 +70,7 @@ export function attachNode(nodeId: string, ws: WebSocket) {
       if (!job) return;
       pending.delete(msg.id);
       clearTimeout(job.timer);
-      if (msg.ok) job.resolve(String(msg.text ?? ''));
+      if (msg.ok) job.resolve({ text: String(msg.text ?? ''), cliId: msg.cliId ? String(msg.cliId) : undefined });
       else job.reject(new Error(String(msg.error ?? 'Error en el servidor remoto.')));
       publishNodes();
     } else if (msg.type === 'term' || msg.type === 'term-exit') {
@@ -102,7 +102,7 @@ export function nodeByToken(token: string) {
   return token ? store.nodes().find((n) => n.token === token) : undefined;
 }
 
-export function runOnNode(nodeId: string, data: LlmJob, timeoutMs: number): Promise<string> {
+export function runOnNode(nodeId: string, data: LlmJob, timeoutMs: number): Promise<LlmResult> {
   const socket = first(nodeId);
   if (!socket) return Promise.reject(new Error(`El servidor «${nodeName(nodeId)}» no está conectado.`));
   const id = randomUUID();
@@ -135,12 +135,12 @@ export function refreshNode(id: string) {
   for (const socket of live.get(id)?.sockets ?? []) send(socket, { type: 'refresh' });
 }
 
-export function startTerm(client: WebSocket, nodeId: string, action: LoginAction): string | null {
+export function startTerm(client: WebSocket, nodeId: string, tool: string, action: ToolAction): string | null {
   const node = first(nodeId);
-  if (!node || !ACTIONS.includes(action)) return null;
+  if (!node || !toolCommand(tool, action)) return null;
   const sid = randomUUID();
   terms.set(sid, { node, client });
-  send(node, { type: 'term-start', sid, action });
+  send(node, { type: 'term-start', sid, tool, action });
   return sid;
 }
 

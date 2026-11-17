@@ -10,7 +10,7 @@ export function jobsState() {
 
 const publish = () => hub.broadcast({ type: 'jobs', ...jobsState() });
 
-export async function complete(data: any): Promise<string> {
+export async function complete(data: any): Promise<{ text: string }> {
   const info = {
     id: crypto.randomUUID(), agentName: data.agentName, intent: data.intent, provider: data.provider.name, node: 'Tu navegador',
     status: 'active', startedAt: Date.now(), ms: null as number | null, error: '',
@@ -25,7 +25,7 @@ export async function complete(data: any): Promise<string> {
     const text = await mock(data);
     info.status = 'completed';
     totals.completed++;
-    return text;
+    return { text };
   } catch (err) {
     info.status = 'failed';
     info.error = err instanceof Error ? err.message : String(err);

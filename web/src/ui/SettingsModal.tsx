@@ -3,11 +3,12 @@ import { DEFAULT_APPEARANCE } from '../game/character';
 import { api, copy } from '../net';
 import { setState, toast, useStore } from '../store';
 import { DEMO } from '../transport';
-import type { LoginAction, Provider, ProviderKind } from '../types';
+import type { Provider, ProviderKind, ToolAction } from '../types';
 import { AppearanceEditor } from './AgentEditor';
 import { Modal } from './common';
 import { CompanionPicker } from './Companions';
-import { CLI_LABEL, LoginFlow, Servers, Session, type Cli } from './Servers';
+import { LoginFlow, Servers, Session, statusOf, useTool } from './Servers';
+import { Tools } from './Tools';
 
 interface Preset {
   key: string;
@@ -109,7 +110,7 @@ function ProviderForm({ draft, hasKey, onDone }: { draft: Draft; hasKey: boolean
         <label>Modelo<input value={form.model} onChange={(e) => set({ model: e.target.value })}
           placeholder={form.kind === 'claude-code' || form.kind === 'codex' ? 'Vacío = el predeterminado del CLI' : 'nombre-del-modelo'} /></label>
       )}
-      {(form.kind === 'claude-code' || form.kind === 'codex') && <Session cli={form.kind === 'codex' ? 'codex' : 'claude'} />}
+      {(form.kind === 'claude-code' || form.kind === 'codex') && <Session toolId={form.kind === 'codex' ? 'codex' : 'claude'} />}
       {nodes.length > 1 && (
         <label>Probar la conexión desde
           <select value={testNode} onChange={(e) => setTestNode(e.target.value)}>
@@ -139,15 +140,16 @@ async function adopt(body: { name: string; kind: ProviderKind; baseUrl: string; 
   else toast(`${saved.name} queda por defecto, pero la prueba ha fallado: ${r.error}`, false);
 }
 
-function QuickCli({ cli }: { cli: Cli }) {
+function QuickCli({ cli }: { cli: 'claude' | 'codex' }) {
   const node = useStore((s) => s.nodes[0]);
   const providers = useStore((s) => s.providers);
   const defaultId = useStore((s) => s.settings.defaultProviderId);
-  const [action, setAction] = useState<LoginAction | null>(null);
+  const tool = useTool(cli);
+  const [action, setAction] = useState<ToolAction | null>(null);
   const [busy, setBusy] = useState(false);
   const kind: ProviderKind = cli === 'claude' ? 'claude-code' : 'codex';
   const provider = providers.find((p) => p.kind === kind);
-  const auth = node?.info?.[cli];
+  const auth = statusOf(node, cli);
   const inUse = !!provider && provider.id === defaultId;
   const use = async () => {
     setBusy(true);
@@ -158,26 +160,26 @@ function QuickCli({ cli }: { cli: Cli }) {
     <div className="quickcard">
       <header>
         <strong>{cli === 'claude' ? 'Tu cuenta de Claude' : 'Tu cuenta de ChatGPT'}</strong>
-        <small>{CLI_LABEL[cli]} · sin API key</small>
+        <small>{tool?.name} · sin API key</small>
       </header>
       {!node?.online || !auth ? <p className="facts">Esperando al worker de la oficina…</p>
-        : !auth.installed ? <p className="facts">{DEMO ? 'Disponible al instalar Agent Office con Docker: inicias sesión con dos clics.' : `${CLI_LABEL[cli]} no está instalado en la imagen.`}</p>
+        : !auth.installed ? <p className="facts">{DEMO ? 'Disponible al instalar Agent Office con Docker: inicias sesión con dos clics.' : `${tool?.name} no está instalado en la imagen.`}</p>
           : auth.loggedIn ? (
             <>
               <p className="facts"><span className="pill green">Sesión iniciada</span> {auth.detail}</p>
               <div className="row">
                 {inUse ? <span className="pill blue">La oficina piensa con esta cuenta</span>
                   : <button className="primary" disabled={busy} onClick={() => void use()}>{busy ? 'Probando…' : 'Usar en esta oficina'}</button>}
-                <button onClick={() => setAction(`${cli}-logout`)}>Cerrar sesión</button>
+                <button onClick={() => setAction('logout')}>Cerrar sesión</button>
               </div>
             </>
           ) : (
             <>
               <p className="facts">Entras con tu cuenta en una pestaña y vuelves aquí. Dos pasos.</p>
-              <button className="primary" onClick={() => setAction(`${cli}-login`)}>Iniciar sesión</button>
+              <button className="primary" onClick={() => setAction('login')}>Iniciar sesión</button>
             </>
           )}
-      {action && node && <LoginFlow key={action} node={node} action={action} onClose={() => setAction(null)} onDone={() => action.endsWith('login') && void use()} />}
+      {action && node && tool && <LoginFlow key={action} node={node} tool={tool} action={action} onClose={() => setAction(null)} onDone={() => action === 'login' && void use()} />}
     </div>
   );
 }
@@ -348,17 +350,19 @@ function Jobs() {
   );
 }
 
-export function SettingsModal({ tab: initial }: { tab?: 'providers' | 'nodes' | 'profile' | 'jobs' }) {
+export function SettingsModal({ tab: initial }: { tab?: 'providers' | 'tools' | 'nodes' | 'profile' | 'jobs' }) {
   const [tab, setTab] = useState(initial ?? 'providers');
   return (
     <Modal title="Modelos y ajustes" onClose={() => setState({ modal: null })} wide>
       <nav className="tabs">
         <button className={tab === 'providers' ? 'on' : ''} onClick={() => setTab('providers')}>Modelos</button>
+        <button className={tab === 'tools' ? 'on' : ''} onClick={() => setTab('tools')}>Herramientas</button>
         <button className={tab === 'nodes' ? 'on' : ''} onClick={() => setTab('nodes')}>Servidores y sesiones</button>
         <button className={tab === 'jobs' ? 'on' : ''} onClick={() => setTab('jobs')}>Actividad</button>
         <button className={tab === 'profile' ? 'on' : ''} onClick={() => setTab('profile')}>Mi perfil</button>
       </nav>
       {tab === 'providers' && <Providers />}
+      {tab === 'tools' && <Tools />}
       {tab === 'nodes' && <Servers />}
       {tab === 'jobs' && <Jobs />}
       {tab === 'profile' && <Profile />}

@@ -1,6 +1,6 @@
 import { applyActors, getState, setState, toast, world } from './store';
 import { openLink, request, type Link } from './transport';
-import type { ChatMessage, GoTarget, HubOffice, Layout, LoginAction, MapData, Task } from './types';
+import type { ChatMessage, GoTarget, HubOffice, Layout, MapData, Task, ToolAction } from './types';
 
 const OFFICE_KEY = 'agent-office:oficina';
 
@@ -80,6 +80,15 @@ function handle(msg: any) {
     case 'visitors':
       setState({ visitors: msg.visitors });
       break;
+    case 'projects':
+      setState({ projects: msg.projects });
+      break;
+    case 'connections':
+      setState({ connections: msg.connections });
+      break;
+    case 'sessions':
+      setState({ sessions: msg.sessions });
+      break;
     case 'dialog':
       setState({ dialog: { guest: { name: msg.name, appearance: msg.appearance, companion: msg.companion, xp: msg.xp }, text: msg.text } });
       break;
@@ -146,6 +155,7 @@ export async function bootstrap() {
     ready: true, map: data.map, agents: data.agents, teams: data.teams, providers: data.providers,
     settings: data.settings, tasks: data.tasks, feed: data.feed, jobs: data.jobs,
     nodes: data.nodes, offices: data.offices, visitors: data.visitors, templates: data.templates ?? [],
+    projects: data.projects ?? [], connections: data.connections ?? [], sessions: data.sessions ?? [], tools: data.tools ?? [],
   });
   connect();
 }
@@ -179,11 +189,11 @@ export function go(target: GoTarget): Promise<boolean> {
   return new Promise((resolve) => waiting.set(token, resolve));
 }
 
-export async function openTerm(nodeId: string, action: LoginAction, onData: (data: string) => void, onExit: (code: number) => void) {
+export async function openTerm(nodeId: string, tool: string, action: ToolAction, onData: (data: string) => void, onExit: (code: number) => void) {
   if (!socket?.isOpen()) return null;
   const ws = socket;
   const ref = ++tokenSeq;
-  ws.send({ type: 'term-start', ref, nodeId, action });
+  ws.send({ type: 'term-start', ref, nodeId, tool, action });
   const sid = await new Promise<string | null>((resolve) => {
     termStarts.set(ref, resolve);
     setTimeout(() => resolve(null), 8000);

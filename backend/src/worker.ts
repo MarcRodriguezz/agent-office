@@ -24,7 +24,7 @@ if (token) {
 } else {
   const worker = new Worker<LlmJob, LlmResult>(
     QUEUE_NAME,
-    async (job) => ({ text: await runProvider(job.data) }),
+    (job) => runProvider(job.data),
     { connection, concurrency },
   );
   worker.on('ready', () => console.log(`worker listo (concurrencia ${concurrency})`));

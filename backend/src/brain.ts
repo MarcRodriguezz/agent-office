@@ -6,13 +6,17 @@ import { complete } from './llm.js';
 import { deskSeat, deskVisitor, map, mapData, nearestWalkable, setLayout, walkable, type Cell, type Desk } from './map.js';
 import { addActor, cellOf, face, remap, removeActor, say, setStatus, walkTo, type Actor } from './sim.js';
 import { staff, templateOf } from './seed.js';
+import { currentSession, recordTurn, workFor } from './sessions.js';
 import { publishSettings } from './settings.js';
+import { toolOf } from './tools.js';
 import type { Agent, Intent, LlmJob, Provider, Task, TaskOrigin, Team, Visitor } from './types.js';
 
 interface Runtime {
   agent: Agent;
   actor: Actor;
   chain: Promise<unknown>;
+  mind: Promise<unknown>;
+  thinking: number;
   pending: number;
   epoch: number;
   wake: (() => void) | null;
@@ -145,9 +149,31 @@ function systemPrompt(agent: Agent): string {
     agent.id === manager ? 'Eres manager de toda la oficina: coordinas a todas las personas y departamentos, y respondes ante tu jefe.' : '',
     team ? `Perteneces al departamento «${team.name}»${team.leadId === agent.id ? ' y eres su responsable' : ''}.${team.mission ? ` Misión del departamento: ${team.mission}` : ''}` : '',
     mates.length ? `Compañeros de oficina:\n${mates.join('\n')}` : '',
+    workContext(agent),
     agent.instructions ? `Instrucciones adicionales:\n${agent.instructions}` : '',
     'Habla como una persona real de la oficina: natural, directa y sin relleno. Responde en el idioma en el que te hablen.',
   ].filter(Boolean).join('\n\n');
+}
+
+const ACCESS_TEXT = {
+  read: 'Puedes consultar los ficheros, pero no modificarlos ni ejecutar comandos.',
+  edit: 'Puedes leer, crear y modificar ficheros.',
+  full: 'Tienes libertad total: puedes modificar ficheros, ejecutar comandos e instalar lo que necesites.',
+};
+
+function workContext(agent: Agent): string {
+  const project = agent.projectId ? store.projects().find((p) => p.id === agent.projectId) : undefined;
+  const tools = store.connections().filter((c) => agent.connections.includes(c.id)).map((c) => {
+    const def = toolOf(c.tool);
+    return `- ${c.name}${c.bin ? ` (comando ${c.bin})` : ''}${def ? `: ${def.summary}` : ''}`;
+  });
+  return [
+    project
+      ? `Trabajas en el proyecto «${project.name}», cuya carpeta es tu directorio de trabajo.${project.description ? ` ${project.description}` : ''}`
+      : 'Trabajas en la carpeta general de la oficina.',
+    ACCESS_TEXT[agent.access],
+    tools.length ? `Tienes acceso a estas herramientas externas (las credenciales ya están en tu entorno):\n${tools.join('\n')}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 const CHAT_RULES = [
@@ -156,11 +182,37 @@ const CHAT_RULES = [
   'Para preguntas rápidas o charla, responde directamente y no uses esa etiqueta.',
 ].join('\n');
 
-function ask(agent: Agent, intent: Intent, prompt: string, hint?: LlmJob['hint']): Promise<string> {
-  return complete({
+async function ask(agent: Agent, intent: Intent, prompt: string, hint?: LlmJob['hint']): Promise<string> {
+  const result = await complete({
     provider: providerFor(agent), system: systemPrompt(agent), messages: [{ role: 'user', content: prompt }],
-    intent, agentName: agent.name, hint,
+    intent, agentName: agent.name, hint, work: workFor(agent, null),
   }, agent.nodeId);
+  return result.text;
+}
+
+function think(rt: Runtime, intent: Intent, prompt: string, rules = ''): Promise<string> {
+  rt.thinking++;
+  const run = rt.mind.then(async () => {
+    const provider = providerFor(rt.agent);
+    const session = currentSession(rt.agent, provider);
+    const result = await complete({
+      provider, system: rules ? `${systemPrompt(rt.agent)}\n\n${rules}` : systemPrompt(rt.agent),
+      messages: [...session.history, { role: 'user', content: prompt }],
+      intent, agentName: rt.agent.name, work: workFor(rt.agent, session),
+    }, rt.agent.nodeId);
+    recordTurn(session.id, prompt, result);
+    return result.text;
+  });
+  rt.mind = run.catch(() => {}).finally(() => rt.thinking--);
+  return run;
+}
+
+function remember(agent: Agent, prompt: string, text: string) {
+  try {
+    recordTurn(currentSession(agent, providerFor(agent)).id, prompt, { text });
+  } catch {
+    return;
+  }
 }
 
 function post(rt: Runtime, text: string) {
@@ -186,17 +238,10 @@ const titleOf = (text: string) => {
   return line.length > 70 ? `${line.slice(0, 67)}…` : line;
 };
 
-async function reply(rt: Runtime) {
-  say(rt.actor, '💭 …', 120000);
+async function reply(rt: Runtime, text: string) {
+  say(rt.actor, rt.thinking ? 'Termino lo que tengo entre manos y te contesto' : '💭 …', 120000);
   try {
-    const history = store.messages(rt.agent.id, 24).map((m) => ({
-      role: m.sender === 'user' ? ('user' as const) : ('assistant' as const),
-      content: m.text.length > 4000 ? `${m.text.slice(0, 4000)}…` : m.text,
-    }));
-    const raw = await complete({
-      provider: providerFor(rt.agent), system: `${systemPrompt(rt.agent)}\n\n${CHAT_RULES}`, messages: history,
-      intent: 'chat', agentName: rt.agent.name,
-    }, rt.agent.nodeId);
+    const raw = await think(rt, 'chat', text, CHAT_RULES);
     const tag = raw.match(TASK_TAG);
     post(rt, raw.replace(TASK_TAG, '').trim() || 'Me pongo con ello.');
     award(rt, 4);
@@ -216,7 +261,7 @@ export function chat(agentId: string, text: string) {
   const message = store.addMessage(agentId, 'user', text);
   hub.broadcast({ type: 'message', message });
   say(player, text, 3500);
-  void reply(rt);
+  void reply(rt, text);
   return message;
 }
 
@@ -294,7 +339,7 @@ async function delegate(rt: Runtime, task: Task, reports: Agent[]): Promise<stri
   const plan = parsePlan(await ask(agent, 'plan', planPrompt(task, reports), {
     reports: reports.map((r) => ({ id: r.id, name: r.name, role: r.role })),
   }), reports).filter((item) => runtimes.has(item.agentId));
-  if (!plan.length) return ask(agent, 'task', taskPrompt(task));
+  if (!plan.length) return think(rt, 'task', taskPrompt(task));
 
   updateTask(task, { status: 'delegating' });
   feed(`${agent.name} convoca una reunión de equipo para «${task.title}»`);
@@ -343,12 +388,14 @@ async function delegate(rt: Runtime, task: Task, reports: Agent[]): Promise<stri
   const body = subs.map((s) =>
     `## ${names.get(s.agentId) ?? 'Compañero'} — ${s.title}\n${s.status === 'done' ? s.result : `NO ENTREGADO: ${s.result}`}`,
   ).join('\n\n');
-  return ask(agent, 'synth', [
+  const text = await ask(agent, 'synth', [
     `Tu jefe te encargó: «${task.title}».`,
     `Encargo original:\n${task.description || task.title}`,
     `Tu equipo ha entregado estas partes:\n\n${body}`,
     'Intégralo todo en un único resultado final coherente y completo, en Markdown, listo para entregar al jefe. Corrige incoherencias y completa lo que falte.',
   ].join('\n\n'));
+  remember(agent, taskPrompt(task), text);
+  return text;
 }
 
 async function deliver(rt: Runtime, task: Task) {
@@ -396,7 +443,7 @@ async function runTask(rt: Runtime, task: Task): Promise<Task> {
   setStatus(actor, 'working');
   try {
     const reports = task.parentId ? [] : reportsOf(agent);
-    const result = reports.length ? await delegate(rt, task, reports) : await ask(agent, 'task', taskPrompt(task));
+    const result = reports.length ? await delegate(rt, task, reports) : await think(rt, 'task', taskPrompt(task));
     updateTask(task, { status: 'done', result, finishedAt: Date.now() });
     award(rt, task.parentId ? 35 : reports.length ? 60 : 45);
   } catch (err) {
@@ -558,7 +605,7 @@ function spawn(agent: Agent, at: Cell) {
   const seat = deskSeat(agent.desk);
   const actor = addActor(agent.id, 'agent', at, seat);
   const rt: Runtime = {
-    agent, actor, chain: Promise.resolve(), pending: 0, epoch: 0, wake: null, idling: false,
+    agent, actor, chain: Promise.resolve(), mind: Promise.resolve(), thinking: 0, pending: 0, epoch: 0, wake: null, idling: false,
     nextIdleAt: Date.now() + 8000 + Math.random() * 40000,
   };
   runtimes.set(agent.id, rt);

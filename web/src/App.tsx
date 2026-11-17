@@ -10,6 +10,7 @@ import { AlbumModal, DialogBox, StarterModal } from './ui/Companions';
 import { Feed, Roster, Toasts, TopBar } from './ui/Hud';
 import { OfficesModal } from './ui/OfficesModal';
 import { PeopleModal } from './ui/PeopleModal';
+import { ProjectsModal } from './ui/ProjectsModal';
 import { SettingsModal } from './ui/SettingsModal';
 import { TasksModal } from './ui/TasksModal';
 
@@ -67,6 +68,7 @@ export function App() {
       {!hasCompanion && <StarterModal />}
       {modal?.kind === 'agent' && <AgentEditor key={modal.id ?? 'new'} id={modal.id} teamId={modal.teamId} />}
       {modal?.kind === 'tasks' && <TasksModal taskId={modal.taskId} />}
+      {modal?.kind === 'projects' && <ProjectsModal projectId={modal.projectId} />}
     </div>
   );
 }

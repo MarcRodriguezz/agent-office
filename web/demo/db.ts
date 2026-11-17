@@ -8,6 +8,9 @@ const tables = {
   nodes: new Map<string, any>(),
   peers: new Map<string, any>(),
   remoteTasks: new Map<string, any>(),
+  projects: new Map<string, any>(),
+  connections: new Map<string, any>(),
+  sessions: new Map<string, any>(),
   tasks: new Map<string, any>(),
 };
 const messages: any[] = [];
@@ -36,6 +39,7 @@ export const store = {
   },
   deleteAgent(id: string) {
     tables.agents.delete(id);
+    for (const [sid, s] of tables.sessions) if (s.agentId === id) tables.sessions.delete(sid);
     for (const t of tables.teams.values()) if (t.leadId === id) t.leadId = null;
     for (let i = messages.length - 1; i >= 0; i--) if (messages[i].agentId === id) messages.splice(i, 1);
   },
@@ -92,6 +96,36 @@ export const store = {
   },
   deletePeer(id: string) {
     tables.peers.delete(id);
+  },
+
+  projects: () => all(tables.projects),
+  saveProject(p: any) {
+    tables.projects.set(p.id, copy(p));
+    return p;
+  },
+  deleteProject(id: string) {
+    tables.projects.delete(id);
+    for (const a of tables.agents.values()) if (a.projectId === id) a.projectId = null;
+    for (const s of tables.sessions.values()) if (s.projectId === id) s.status = 'closed';
+  },
+
+  connections: () => all(tables.connections),
+  saveConnection(c: any) {
+    tables.connections.set(c.id, copy(c));
+    return c;
+  },
+  deleteConnection(id: string) {
+    tables.connections.delete(id);
+  },
+
+  sessions: (limit = 300) => all(tables.sessions).sort((a: any, b: any) => b.lastUsedAt - a.lastUsedAt).slice(0, limit),
+  session: (id: string) => copy(tables.sessions.get(id)),
+  saveSession(s: any) {
+    tables.sessions.set(s.id, copy(s));
+    return s;
+  },
+  deleteSession(id: string) {
+    tables.sessions.delete(id);
   },
 
   remoteTasks: () => all(tables.remoteTasks).reverse(),

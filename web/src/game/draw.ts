@@ -458,7 +458,7 @@ export function drawFurniture(ctx: Ctx, f: Furniture, info: FurnitureInfo) {
   }
 }
 
-export const INTERACT_ICON: Record<string, string> = { llm: '⚙️', hire: '🧑‍💼', tasks: '📋', coffee: '☕', offices: '🌐' };
+export const INTERACT_ICON: Record<string, string> = { llm: '⚙️', hire: '🧑‍💼', tasks: '📋', coffee: '☕', offices: '🌐', projects: '🗂️' };
 
 export function wrapText(ctx: Ctx, text: string, maxWidth: number, maxLines = 5): string[] {
   const lines: string[] = [];

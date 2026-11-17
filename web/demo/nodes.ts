@@ -1,3 +1,4 @@
+import { TOOLS } from '../../backend/src/tools.js';
 import { hub } from './hub';
 
 export const LOCAL = 'local';
@@ -6,7 +7,7 @@ const absent = { installed: false, version: '', loggedIn: false, detail: '' };
 
 export const nodesState = () => [{
   id: LOCAL, name: 'Tu navegador', local: true, online: true, active: 0,
-  info: { host: 'demo', concurrency: 4, claude: absent, codex: absent },
+  info: { host: 'demo', concurrency: 4, tools: TOOLS.map((t) => ({ id: t.id, ...absent })) },
 }];
 
 export const publishNodes = () => hub.broadcast({ type: 'nodes', nodes: nodesState() });

@@ -1,14 +1,9 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { hostname } from 'node:os';
 import { runProvider } from './providers.js';
-import type { CliAuth, LlmJob, LoginAction, NodeInfo } from './types.js';
+import { TOOLS, toolCommand, type ToolAction, type ToolDef } from './tools.js';
+import type { CliAuth, LlmJob, NodeInfo, ToolStatus } from './types.js';
 
-const COMMANDS: Record<LoginAction, string> = {
-  'claude-login': 'claude auth login',
-  'claude-logout': 'claude auth logout',
-  'codex-login': 'codex login --device-auth',
-  'codex-logout': 'codex logout',
-};
 const TERM_TIMEOUT_MS = 15 * 60 * 1000;
 
 function run(cmd: string, args: string[]): Promise<{ ok: boolean; out: string }> {
@@ -44,9 +39,23 @@ async function codexAuth(): Promise<CliAuth> {
   return { installed: true, version: version.out.replace(/^codex-cli\s*/, ''), loggedIn, detail: loggedIn ? line : '' };
 }
 
+async function generic(tool: ToolDef): Promise<CliAuth> {
+  const version = await run(tool.bin, ['--version']);
+  if (!version.ok) return { installed: false, version: '', loggedIn: false, detail: '' };
+  const number = version.out.match(/\d+\.\d+[\w.-]*/)?.[0] ?? version.out.split('\n')[0].slice(0, 30);
+  if (!tool.status) return { installed: true, version: number, loggedIn: false, detail: '' };
+  const [cmd, ...args] = tool.status.split(' ');
+  const status = await run(cmd, args);
+  const account = status.out.match(/account\s+(\S+)/i)?.[1] ?? '';
+  return { installed: true, version: number, loggedIn: status.ok, detail: status.ok ? account : '' };
+}
+
 async function describe(concurrency: number): Promise<NodeInfo> {
-  const [claude, codex] = await Promise.all([claudeAuth(), codexAuth()]);
-  return { host: hostname(), concurrency, claude, codex };
+  const tools: ToolStatus[] = await Promise.all(TOOLS.map(async (tool) => ({
+    id: tool.id,
+    ...(await (tool.id === 'claude' ? claudeAuth() : tool.id === 'codex' ? codexAuth() : generic(tool))),
+  })));
+  return { host: hostname(), concurrency, tools };
 }
 
 export function startNodeClient(url: string, concurrency: number) {
@@ -65,9 +74,9 @@ export function startNodeClient(url: string, concurrency: number) {
     if (active >= concurrency) await new Promise<void>((r) => waiting.push(r));
     active++;
     try {
-      const text = await runProvider(job);
+      const result = await runProvider(job);
       console.log(`✓ ${job.intent} · ${job.agentName} · ${job.provider.name}`);
-      send({ type: 'result', id, ok: true, text });
+      send({ type: 'result', id, ok: true, text: result.text, cliId: result.cliId });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       console.log(`✗ ${job.intent} · ${job.agentName}: ${error}`);
@@ -78,11 +87,11 @@ export function startNodeClient(url: string, concurrency: number) {
     }
   };
 
-  const startTerm = (sid: string, action: LoginAction) => {
-    const command = COMMANDS[action];
+  const startTerm = (sid: string, tool: string, action: ToolAction) => {
+    const command = toolCommand(tool, action);
     if (!command) return;
     const child = spawn('script', ['-qfc', `stty cols 1000 rows 40; ${command}`, '/dev/null'], {
-      env: { ...process.env, TERM: 'xterm-256color' },
+      env: { ...process.env, TERM: 'xterm-256color', GH_BROWSER: 'true', BROWSER: 'true', GH_PROMPT_DISABLED: '1' },
     });
     terms.set(sid, child);
     const timer = setTimeout(() => child.kill('SIGKILL'), TERM_TIMEOUT_MS);
@@ -102,7 +111,7 @@ export function startNodeClient(url: string, concurrency: number) {
   const handle = (msg: any) => {
     if (msg.type === 'job') void runJob(msg.id, msg.data);
     else if (msg.type === 'refresh') void report();
-    else if (msg.type === 'term-start') startTerm(msg.sid, msg.action);
+    else if (msg.type === 'term-start') startTerm(msg.sid, msg.tool, msg.action);
     else if (msg.type === 'term-input') terms.get(msg.sid)?.stdin?.write(String(msg.data));
     else if (msg.type === 'term-kill') terms.get(msg.sid)?.kill('SIGKILL');
   };

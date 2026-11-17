@@ -12,6 +12,8 @@ export function AgentPanel() {
   const provider = useStore((s) => s.providers.find((p) => p.id === (agent?.providerId ?? s.settings.defaultProviderId)));
   const messages = useStore((s) => (id ? s.messages[id] : undefined));
   const tasks = useStore((s) => s.tasks);
+  const project = useStore((s) => s.projects.find((p) => p.id === agent?.projectId));
+  const session = useStore((s) => s.sessions.find((x) => x.agentId === id && x.status === 'open' && x.projectId === (agent?.projectId ?? null)));
   const [tab, setTab] = useState<'chat' | 'tasks'>('chat');
   const [text, setText] = useState('');
   const [title, setTitle] = useState('');
@@ -72,6 +74,11 @@ export function AgentPanel() {
         </div>
       </div>
       <div className="brainline">Piensa con {provider ? `${provider.name}${agent.model || provider.model ? ` · ${agent.model || provider.model}` : ''}` : 'Sin proveedor'}</div>
+      <div className="workline">
+        <button className="link" onClick={() => setState({ modal: { kind: 'projects', projectId: agent.projectId ?? '' } })}>{project ? project.name : 'Carpeta general'}</button>
+        <span>{session?.turns ? `Sesión en curso · ${session.turns} ${session.turns === 1 ? 'intercambio' : 'intercambios'}` : 'Sesión nueva'}</span>
+        {!!session?.turns && <button onClick={() => void api('POST', `/agents/${agent.id}/session/new`).then(() => toast(`${agent.name} empieza de cero`))}>Empezar de cero</button>}
+      </div>
       <nav className="tabs">
         <button className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>Conversación</button>
         <button className={tab === 'tasks' ? 'on' : ''} onClick={() => setTab('tasks')}>Tareas ({mine.length})</button>

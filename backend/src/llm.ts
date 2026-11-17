@@ -31,18 +31,18 @@ export function jobsState() {
   };
 }
 
-async function runLocal(data: LlmJob, info: JobInfo): Promise<string> {
+async function runLocal(data: LlmJob, info: JobInfo): Promise<LlmResult> {
   const job = await queue.add(data.intent, data, { attempts: 1, removeOnComplete: true, removeOnFail: true });
   const jobId = job.id ?? '';
   byJobId.set(jobId, info);
   try {
-    return (await job.waitUntilFinished(events, TIMEOUT_MS)).text;
+    return await job.waitUntilFinished(events, TIMEOUT_MS);
   } finally {
     byJobId.delete(jobId);
   }
 }
 
-export async function complete(data: LlmJob, nodeId: string | null = null): Promise<string> {
+export async function complete(data: LlmJob, nodeId: string | null = null): Promise<LlmResult> {
   const remote = isRemote(nodeId);
   const info: JobInfo = {
     id: randomUUID(), agentName: data.agentName, intent: data.intent,
@@ -54,10 +54,10 @@ export async function complete(data: LlmJob, nodeId: string | null = null): Prom
   if (recent.length > 40) recent.pop();
   publish();
   try {
-    const text = remote ? await runOnNode(nodeId, data, TIMEOUT_MS) : await runLocal(data, info);
+    const result = remote ? await runOnNode(nodeId, data, TIMEOUT_MS) : await runLocal(data, info);
     info.status = 'completed';
     totals.completed++;
-    return text;
+    return result;
   } catch (err) {
     info.status = 'failed';
     info.error = err instanceof Error ? err.message : String(err);

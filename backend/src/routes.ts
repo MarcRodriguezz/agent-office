@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import { store } from './db.js';
@@ -17,10 +18,23 @@ import {
 import { cleanCompanion, randomCompanion } from './companions.js';
 import { templateList } from './seed.js';
 import { publishSettings, settings } from './settings.js';
-import type { Provider, ProviderKind } from './types.js';
+import {
+  closeCurrent, closeSession, forgetSession, projectFolder, publicConnection, publishConnections, publishProjects, publishSessions,
+  reopenSession, sessionList,
+} from './sessions.js';
+import { BIN, ENV_KEY, TOOLS, toolOf } from './tools.js';
+import type { Access, Provider, ProviderKind } from './types.js';
 
 const KINDS: ProviderKind[] = ['mock', 'anthropic', 'openai', 'claude-code', 'codex', 'cli'];
+const ACCESS: Access[] = ['read', 'edit', 'full'];
+const RESERVED = new Set(['PATH', 'HOME', 'USER', 'SHELL', 'PWD', 'NODE_OPTIONS', 'NODE_ENV', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'NPM_CONFIG_PREFIX', 'WORKSPACE_DIR']);
 const text = (v: unknown, max = 4000) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const access = (v: unknown): Access => (ACCESS.includes(v as Access) ? (v as Access) : 'read');
+const projectId = (v: unknown) => (typeof v === 'string' && store.projects().some((p) => p.id === v) ? v : null);
+const connectionIds = (v: unknown) => {
+  const known = new Set(store.connections().map((c) => c.id));
+  return Array.isArray(v) ? [...new Set(v.filter((id): id is string => typeof id === 'string' && known.has(id)))] : [];
+};
 const publicProvider = (p: Provider) => ({ ...p, apiKey: '', hasKey: !!p.apiKey });
 
 const publishProviders = () => hub.broadcast({ type: 'providers', providers: store.providers().map(publicProvider) });
@@ -35,7 +49,7 @@ export function clientMessage(socket: WebSocket, msg: any) {
   } else if (msg.type === 'say') {
     playerSay(text(msg.text, 60));
   } else if (msg.type === 'term-start') {
-    hub.send(socket, { type: 'term-started', ref: msg.ref, sid: startTerm(socket, text(msg.nodeId, 80), msg.action) });
+    hub.send(socket, { type: 'term-started', ref: msg.ref, sid: startTerm(socket, text(msg.nodeId, 80), text(msg.tool, 40), msg.action) });
   } else if (msg.type === 'term-input') {
     termInput(socket, text(msg.sid, 80), String(msg.data ?? '').slice(0, 2000));
   } else if (msg.type === 'term-kill') {
@@ -60,6 +74,10 @@ export function registerRoutes(app: FastifyInstance) {
     nodes: nodesState(),
     offices: officesState(),
     visitors: visitorList(),
+    projects: store.projects(),
+    connections: store.connections().map(publicConnection),
+    sessions: sessionList(),
+    tools: TOOLS,
   }));
 
   app.get('/api/summary', async () => officeSummary());
@@ -87,6 +105,7 @@ export function registerRoutes(app: FastifyInstance) {
       name: text(b.name, 40), role: text(b.role, 80) || 'Generalista', personality: text(b.personality),
       instructions: text(b.instructions), providerId: b.providerId || null, model: text(b.model, 120),
       teamId: b.teamId || null, nodeId: isRemote(b.nodeId) ? b.nodeId : null, appearance: b.appearance, companion: cleanCompanion(b.companion) ?? randomCompanion(),
+      projectId: projectId(b.projectId), access: access(b.access), connections: connectionIds(b.connections),
     });
     if (!agent) return reply.code(409).send({ error: 'No quedan mesas libres: amplía la oficina en el modo arquitecto.' });
     return agent;
@@ -100,6 +119,9 @@ export function registerRoutes(app: FastifyInstance) {
     for (const key of ['providerId', 'teamId']) if (key in b) patch[key] = b[key] || null;
     if (b.appearance) patch.appearance = b.appearance;
     if ('nodeId' in b) patch.nodeId = isRemote(b.nodeId) ? b.nodeId : null;
+    if ('projectId' in b) patch.projectId = projectId(b.projectId);
+    if ('access' in b) patch.access = access(b.access);
+    if ('connections' in b) patch.connections = connectionIds(b.connections);
     const companion = cleanCompanion(b.companion);
     if (companion) patch.companion = companion;
     const agent = updateAgent(id, patch);
@@ -115,6 +137,116 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.delete('/api/agents/:id', async (req, reply) => {
     if (!fire((req.params as { id: string }).id)) return reply.code(404).send({ error: 'Agente no encontrado.' });
+    publishSessions();
+    return { ok: true };
+  });
+
+  app.post('/api/agents/:id/session/new', async (req, reply) => {
+    const agent = store.agents().find((a) => a.id === (req.params as { id: string }).id);
+    if (!agent) return reply.code(404).send({ error: 'Agente no encontrado.' });
+    closeCurrent(agent);
+    return { ok: true };
+  });
+
+  app.post('/api/projects', async (req, reply) => {
+    const b = req.body as any;
+    const name = text(b.name, 60);
+    if (!name) return reply.code(400).send({ error: 'El proyecto necesita un nombre.' });
+    const project = store.saveProject({ id: randomUUID(), name, folder: projectFolder(name), description: text(b.description, 2000), createdAt: Date.now() });
+    publishProjects();
+    return project;
+  });
+
+  app.patch('/api/projects/:id', async (req, reply) => {
+    const current = store.projects().find((p) => p.id === (req.params as { id: string }).id);
+    if (!current) return reply.code(404).send({ error: 'Proyecto no encontrado.' });
+    const b = req.body as any;
+    const project = store.saveProject({
+      ...current,
+      name: text(b.name, 60) || current.name,
+      description: typeof b.description === 'string' ? text(b.description, 2000) : current.description,
+    });
+    publishProjects();
+    publishAgents();
+    return project;
+  });
+
+  app.delete('/api/projects/:id', async (req) => {
+    store.deleteProject((req.params as { id: string }).id);
+    publishProjects();
+    publishSessions();
+    publishAgents();
+    return { ok: true };
+  });
+
+  function readEnv(input: unknown, current: Record<string, string> = {}): Record<string, string> {
+    const env: Record<string, string> = { ...current };
+    if (!input || typeof input !== 'object') return env;
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      if (!ENV_KEY.test(key) || RESERVED.has(key)) continue;
+      if (value === null) delete env[key];
+      else if (typeof value === 'string' && value.trim()) env[key] = value.trim().slice(0, 4000);
+    }
+    return env;
+  }
+
+  app.post('/api/connections', async (req, reply) => {
+    const b = req.body as any;
+    const tool = toolOf(text(b.tool, 40));
+    const bin = tool?.bin ?? text(b.bin, 40).toLowerCase();
+    const name = text(b.name, 60) || tool?.name || '';
+    if (!name) return reply.code(400).send({ error: 'La conexión necesita un nombre.' });
+    if (bin && !BIN.test(bin)) return reply.code(400).send({ error: 'El comando solo puede llevar letras, números, puntos y guiones.' });
+    const connection = store.saveConnection({ id: randomUUID(), name, tool: tool?.id ?? 'custom', bin, env: readEnv(b.env), createdAt: Date.now() });
+    publishConnections();
+    return publicConnection(connection);
+  });
+
+  app.patch('/api/connections/:id', async (req, reply) => {
+    const current = store.connections().find((c) => c.id === (req.params as { id: string }).id);
+    if (!current) return reply.code(404).send({ error: 'Conexión no encontrada.' });
+    const b = req.body as any;
+    const bin = current.tool === 'custom' && typeof b.bin === 'string' ? text(b.bin, 40).toLowerCase() : current.bin;
+    if (bin && !BIN.test(bin)) return reply.code(400).send({ error: 'El comando solo puede llevar letras, números, puntos y guiones.' });
+    const connection = store.saveConnection({ ...current, name: text(b.name, 60) || current.name, bin, env: readEnv(b.env, current.env) });
+    publishConnections();
+    publishAgents();
+    return publicConnection(connection);
+  });
+
+  app.delete('/api/connections/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    store.deleteConnection(id);
+    for (const agent of store.agents()) {
+      if (agent.connections.includes(id)) updateAgent(agent.id, { connections: agent.connections.filter((c) => c !== id) });
+    }
+    publishConnections();
+    return { ok: true };
+  });
+
+  app.post('/api/sessions/:id/close', async (req, reply) => {
+    if (!closeSession((req.params as { id: string }).id)) return reply.code(404).send({ error: 'Sesión no encontrada.' });
+    return { ok: true };
+  });
+
+  app.post('/api/sessions/:id/open', async (req, reply) => {
+    const session = store.session((req.params as { id: string }).id);
+    const agent = session && store.agents().find((a) => a.id === session.agentId);
+    if (!session || !agent) return reply.code(404).send({ error: 'Sesión no encontrada.' });
+    const provider = store.provider(agent.providerId ?? settings().defaultProviderId ?? '') ?? store.providers()[0];
+    if (provider && provider.kind !== session.kind) {
+      return reply.code(409).send({ error: `Esta sesión se hizo con otro cerebro. Cambia el de ${agent.name} para continuarla.` });
+    }
+    if ((agent.nodeId ?? null) !== session.nodeId) {
+      return reply.code(409).send({ error: `Esta sesión vive en otro servidor. Cambia dónde se ejecuta ${agent.name} para continuarla.` });
+    }
+    reopenSession(session.id);
+    if (agent.projectId !== session.projectId) updateAgent(agent.id, { projectId: session.projectId });
+    return { ok: true };
+  });
+
+  app.delete('/api/sessions/:id', async (req) => {
+    forgetSession((req.params as { id: string }).id);
     return { ok: true };
   });
 
@@ -244,7 +376,7 @@ export function registerRoutes(app: FastifyInstance) {
         provider, system: 'Eres un asistente de pruebas de conexión.', intent: 'test', agentName: 'Prueba de conexión',
         messages: [{ role: 'user', content: 'Responde únicamente con la palabra: OK' }],
       }, text((req.body as any)?.nodeId, 80) || null);
-      return { ok: true, ms: Date.now() - started, answer: answer.slice(0, 200) };
+      return { ok: true, ms: Date.now() - started, answer: answer.text.slice(0, 200) };
     } catch (err) {
       return { ok: false, ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) };
     }

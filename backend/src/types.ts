@@ -34,11 +34,56 @@ export interface Agent {
   model: string;
   teamId: string | null;
   nodeId: string | null;
+  projectId: string | null;
+  access: Access;
+  connections: string[];
   appearance: Appearance;
   companion: Companion;
   xp: number;
   desk: number;
   createdAt: number;
+}
+
+export type Access = 'read' | 'edit' | 'full';
+
+export interface Project {
+  id: string;
+  name: string;
+  folder: string;
+  description: string;
+  createdAt: number;
+}
+
+export interface Connection {
+  id: string;
+  name: string;
+  tool: string;
+  bin: string;
+  env: Record<string, string>;
+  createdAt: number;
+}
+
+export interface WorkSession {
+  id: string;
+  agentId: string;
+  projectId: string | null;
+  kind: ProviderKind;
+  nodeId: string | null;
+  cliId: string;
+  status: 'open' | 'closed';
+  title: string;
+  turns: number;
+  history: LlmMessage[];
+  createdAt: number;
+  lastUsedAt: number;
+}
+
+export interface Work {
+  folder: string;
+  access: Access;
+  env: Record<string, string>;
+  bins: string[];
+  session: { cliId: string } | null;
 }
 
 export interface Team {
@@ -98,10 +143,12 @@ export interface LlmJob {
   intent: Intent;
   agentName: string;
   hint?: { reports?: { id: string; name: string; role: string }[] };
+  work?: Work;
 }
 
 export interface LlmResult {
   text: string;
+  cliId?: string;
 }
 
 export interface JobInfo {
@@ -130,14 +177,15 @@ export interface CliAuth {
   detail: string;
 }
 
+export interface ToolStatus extends CliAuth {
+  id: string;
+}
+
 export interface NodeInfo {
   host: string;
   concurrency: number;
-  claude: CliAuth;
-  codex: CliAuth;
+  tools: ToolStatus[];
 }
-
-export type LoginAction = 'claude-login' | 'claude-logout' | 'codex-login' | 'codex-logout';
 
 export interface PeerRecord {
   local?: boolean;

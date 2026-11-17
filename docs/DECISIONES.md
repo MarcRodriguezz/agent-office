@@ -1,6 +1,6 @@
 # Decisiones de diseño
 
-Registro de las decisiones tomadas, con su motivo y lo que se descartó. Decisiones 1 a 12: 2026-11-13. Decisiones 13 a 15: 2026-11-16.
+Registro de las decisiones tomadas, con su motivo y lo que se descartó. Decisiones 1 a 12: 2026-11-13. Decisiones 13 a 15: 2026-11-16. Decisiones 19 a 21: 2026-11-17.
 
 ## 1. Qué es el producto
 
@@ -187,10 +187,59 @@ Registro de las decisiones tomadas, con su motivo y lo que se descartó. Decisio
 
 **Detalles:** se siguieron los principios de la skill `design-taste-frontend` aplicables a una aplicación (un sistema de botones, una escala de radios, color plano, texto llano). Su flujo de construcción y verificación está pensado para páginas web de empresa y no se usó.
 
+## 19. Los agentes trabajan en carpetas de proyecto con permisos por agente
+
+**Decisión:** cada agente tiene un proyecto (una carpeta dentro de `/workspace` del servidor donde se ejecuta, o la carpeta general) y un nivel de permisos: *solo lectura*, *editar* o *libertad total*. Vale para cualquier cerebro: los CLIs reciben los permisos con sus propias opciones y los modelos por API (Anthropic, compatibles con OpenAI y locales) reciben herramientas de la oficina.
+
+**Motivo:** que los agentes hagan trabajo real sobre ficheros, no solo texto, sin que el tipo de modelo cambie lo que pueden hacer. Los permisos van en código, no en el prompt.
+
+**Cómo se traduce cada nivel:**
+
+| | Solo lectura | Editar | Libertad total |
+|---|---|---|---|
+| Claude Code | `--disallowedTools Bash Edit Write NotebookEdit` | `--permission-mode acceptEdits` y `Bash(<comando>:*)` para cada herramienta externa del agente | `--permission-mode bypassPermissions` |
+| Codex | `sandbox_mode="read-only"` | `sandbox_mode="workspace-write"` (con red si tiene herramientas externas) | `--dangerously-bypass-approvals-and-sandbox` |
+| API y modelos locales | `list_files`, `read_file`, `search` | además `write_file`, `replace_in_file` y `run_tool` (solo los comandos de sus herramientas, sin shell) | además `shell` |
+
+- Con solo lectura y editar, las herramientas de la oficina no salen de la carpeta del proyecto.
+- El bucle de herramientas para API tiene un tope de 40 pasos; al llegar al tope se pide la respuesta final sin herramientas.
+- Si un modelo compatible con OpenAI no admite herramientas, se repite la llamada sin ellas.
+- Todo ocurre dentro del contenedor del worker: es el aislamiento. La carpeta `/workspace` es un volumen, así que lo hecho se conserva.
+
+**Descartado por ahora:** montar carpetas de tu equipo en el worker y un worker sin Docker. Se pueden añadir sin cambiar este modelo, porque el agente solo conoce una carpeta relativa a `/workspace`.
+
+## 20. Herramientas externas como conexiones
+
+**Decisión:** un catálogo en código (`backend/src/tools.ts`) describe las herramientas de terminal que la oficina sabe instalar e iniciar: GitHub (`gh`), Cloudflare (`wrangler`), Vercel y Netlify, además de Claude Code y Codex. Una **conexión** guarda las credenciales de una herramienta (sus variables de entorno) y cada agente elige qué conexiones usa. También hay conexiones de «otra herramienta» con comando y variables libres.
+
+**Motivo:** el trabajo de verdad pasa por servicios externos (subir código, desplegar). Las credenciales como variables de entorno funcionan con cualquier CLI y con cualquier cerebro, porque el agente las recibe en el proceso que ejecuta los comandos.
+
+**Detalles:**
+- Instalar, iniciar sesión y cerrar sesión siguen siendo una lista cerrada de acciones: las saca el servidor del catálogo, no de la interfaz. No hay terminal libre.
+- `gh` viene en la imagen. Lo demás se instala con `npm` dentro de `/home/node/.local` (volumen `agent-home`), igual que las sesiones de los CLIs: sobrevive a reinicios y reconstrucciones.
+- El inicio de sesión de `gh` usa el flujo de dispositivo sin preguntas (`GH_PROMPT_DISABLED`) y termina con `gh auth setup-git`, así `git push` funciona.
+- No se pueden sobrescribir variables del sistema (`PATH`, `HOME`, `NODE_OPTIONS`…).
+- Las credenciales se guardan en SQLite como las API keys y nunca vuelven al navegador: la interfaz solo ve los nombres de las variables.
+
+## 21. Sesiones de trabajo que se continúan o se archivan
+
+**Decisión:** cada agente tiene una sesión por proyecto donde se acumula lo hablado y lo hecho (chat y tareas). Las sesiones son objetos de la oficina: se ven en el **Archivo** (la estantería de tu despacho), y desde ahí se archivan, se continúan o se olvidan. Desde el panel del agente se puede «empezar de cero».
+
+**Motivo:** que al volver a la oficina el agente siga donde lo dejó, y que el jefe decida cuándo empezar limpio.
+
+**Detalles:**
+- Claude Code retoma la sesión real (`--session-id` la primera vez y `--resume` después; el id lo pone la oficina). Codex retoma con `codex exec resume`, usando el id que devuelve en su salida JSON. Los modelos por API reciben los últimos 30 turnos guardados en la sesión.
+- Al retomar se vuelve a mandar el contexto actual (puesto, proyecto, permisos), por si ha cambiado.
+- Una sesión pertenece a un agente, un proyecto, un tipo de cerebro y un servidor. Si cambia el cerebro o el servidor se empieza otra, porque la anterior no se puede retomar ahí.
+- Las llamadas de una misma sesión van de una en una: si le hablas mientras hace una tarea, te contesta al terminar. Reparto y síntesis de equipo no usan sesión; el resultado final se apunta en la del responsable.
+- Al cambiar a un agente de proyecto, la sesión del proyecto anterior se queda abierta y la retoma al volver.
+
 ## Limitaciones conocidas y siguientes pasos
 
-- **Los agentes solo producen texto.** No tienen herramientas (ficheros, web, código) salvo lo que haga por su cuenta un proveedor CLI. Siguiente paso natural: herramientas por agente y un espacio de trabajo compartido por departamento.
-- **Sin memoria a largo plazo.** Cada agente recuerda los últimos 24 mensajes de su conversación; no hay resúmenes ni memoria entre tareas.
+- **Sin modo «preguntarme».** Los permisos son solo lectura, editar o libertad total. Siguiente paso: que el agente venga a tu mesa a pedir permiso antes de una acción delicada (Claude Code lo permite con `--permission-prompt-tool`; Codex no tiene equivalente sin terminal).
+- **Los proyectos viven dentro del worker.** No se montan carpetas de tu equipo ni hay un explorador de ficheros en la interfaz: el código entra y sale con git o con las herramientas externas.
+- **npm bloquea los scripts de instalación** de las herramientas que se instalan desde la oficina. Wrangler funciona igual para desplegar; lo que necesite esos scripts habrá que instalarlo con libertad total.
+- **Memoria por sesión, no a largo plazo.** La sesión guarda los últimos 30 turnos (o la sesión completa en Claude Code y Codex). No hay resúmenes ni memoria que pase de una sesión a otra.
 - **Sin streaming** de las respuestas en el chat.
 - **Tantos agentes como mesas** quepan en el plano; para más, se amplía en el modo arquitecto.
 - **Todas las oficinas de una instalación comparten worker y sesiones de CLI**: no se puede usar una cuenta distinta por oficina salvo con API keys o un servidor remoto.

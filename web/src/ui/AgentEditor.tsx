@@ -4,7 +4,7 @@ import {
 } from '../game/character';
 import { api } from '../net';
 import { setState, toast, useStore } from '../store';
-import type { Appearance } from '../types';
+import type { Access, Appearance } from '../types';
 import { randomCompanion } from '../game/creature';
 import { Avatar, Modal } from './common';
 import { CompanionPicker } from './Companions';
@@ -63,11 +63,19 @@ export function AppearanceEditor({ value, onChange }: { value: Appearance; onCha
   );
 }
 
+export const ACCESS: { id: Access; label: string; text: string }[] = [
+  { id: 'read', label: 'Solo lectura', text: 'Consulta los ficheros del proyecto. No cambia nada.' },
+  { id: 'edit', label: 'Editar', text: 'Crea y modifica ficheros y usa sus herramientas externas.' },
+  { id: 'full', label: 'Libertad total', text: 'Ejecuta cualquier comando e instala lo que necesite, sin preguntar.' },
+];
+
 export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
   const existing = useStore((s) => s.agents.find((a) => a.id === id));
   const teams = useStore((s) => s.teams);
   const providers = useStore((s) => s.providers);
   const nodes = useStore((s) => s.nodes);
+  const projects = useStore((s) => s.projects);
+  const connections = useStore((s) => s.connections);
   const [form, setForm] = useState(() => ({
     name: existing?.name ?? '',
     role: existing?.role ?? '',
@@ -79,6 +87,9 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
     teamId: existing?.teamId ?? teamId ?? '',
     appearance: existing?.appearance ?? randomAppearance(),
     companion: existing?.companion ?? randomCompanion(),
+    projectId: existing?.projectId ?? '',
+    access: existing?.access ?? ('read' as Access),
+    connections: existing?.connections ?? [],
   }));
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
@@ -87,7 +98,7 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
   const save = async () => {
     setBusy(true);
     try {
-      const body = { ...form, providerId: form.providerId || null, teamId: form.teamId || null, nodeId: form.nodeId || null };
+      const body = { ...form, providerId: form.providerId || null, teamId: form.teamId || null, nodeId: form.nodeId || null, projectId: form.projectId || null };
       if (existing) await api('PATCH', `/agents/${existing.id}`, body);
       else await api('POST', '/agents', body);
       close();
@@ -144,6 +155,36 @@ export function AgentEditor({ id, teamId }: { id?: string; teamId?: string }) {
               </select>
             </label>
           </div>
+          <h4 className="section">Trabajo</h4>
+          <label>Proyecto
+            <select value={form.projectId} onChange={(e) => set({ projectId: e.target.value })}>
+              <option value="">Carpeta general de la oficina</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+          <label>Permisos</label>
+          <div className="access">
+            {ACCESS.map((a) => (
+              <button key={a.id} type="button" className={form.access === a.id ? 'on' : ''} onClick={() => set({ access: a.id })}>
+                <b>{a.label}</b>
+                <small>{a.text}</small>
+              </button>
+            ))}
+          </div>
+          <label>Herramientas externas</label>
+          {connections.length ? (
+            <div className="chips">
+              {connections.map((c) => (
+                <button key={c.id} type="button" className={form.connections.includes(c.id) ? 'on' : ''}
+                  onClick={() => set({ connections: form.connections.includes(c.id) ? form.connections.filter((x) => x !== c.id) : [...form.connections, c.id] })}>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="hint">No hay ninguna conectada. <button type="button" className="link" onClick={() => setState({ modal: { kind: 'settings', tab: 'tools' } })}>Conectar GitHub, Cloudflare…</button></p>
+          )}
+          {form.connections.length > 0 && form.access === 'read' && <p className="hint">Con solo lectura no podrá usar las herramientas: dale permiso para editar o libertad total.</p>}
           <footer>
             {existing && <button className="danger" onClick={() => void remove()}>Despedir</button>}
             <span />

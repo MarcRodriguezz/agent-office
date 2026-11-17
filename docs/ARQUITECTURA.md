@@ -9,7 +9,7 @@
 | `worker` | `agent-office-backend` (`node dist/worker.js`) | Consume la cola `llm` y ejecuta las llamadas a los proveedores. |
 | `redis` | `redis:7-alpine` | Backend de la cola BullMQ. |
 
-`server` y `worker` comparten imagen y código (`backend/`), con distinto comando. Volúmenes: `office-data` (SQLite), `workspace` (directorio de trabajo de los CLIs) y `agent-home` (sesiones de Claude Code y Codex).
+`server` y `worker` comparten imagen y código (`backend/`), con distinto comando. Volúmenes: `office-data` (SQLite), `workspace` (carpetas de los proyectos) y `agent-home` (sesiones de Claude Code, Codex y herramientas externas, y lo que se instala desde la oficina).
 
 `docker-compose.node.yml` levanta un **servidor remoto**: la misma imagen con `worker.js` y las variables `OFFICE_URL` y `NODE_TOKEN`. No usa Redis ni base de datos.
 
@@ -27,7 +27,10 @@
 | `node-client.ts` | Lado del worker: conexión con la oficina, ejecución de trabajos remotos, estado de las sesiones de los CLIs y terminal de inicio de sesión. |
 | `nodes.ts` | Lado de la oficina: registro de servidores conectados, envío de trabajos y relevo del terminal de inicio de sesión. |
 | `offices.ts` | Enlace entre oficinas: invitaciones, conexión, directorio compartido y encargos remotos. |
-| `providers.ts` | Adaptadores de proveedor: Anthropic, compatible OpenAI, Claude Code, Codex, comando propio y simulado. |
+| `providers.ts` | Adaptadores de proveedor: Anthropic, compatible OpenAI, Claude Code, Codex, comando propio y simulado. Traducen los permisos del agente y retoman su sesión. |
+| `agent-tools.ts` | Herramientas que la oficina da a los modelos por API (leer, buscar, escribir, ejecutar), limitadas a la carpeta del proyecto según los permisos. |
+| `sessions.ts` | Sesiones de trabajo por agente y proyecto, y lo que cada trabajo recibe del agente (`workFor`: carpeta, permisos, credenciales y sesión). |
+| `tools.ts` | Catálogo de herramientas externas (CLIs de los cerebros, GitHub, Cloudflare, Vercel, Netlify) con sus comandos de instalación e inicio de sesión. |
 | `db.ts` | Esquema y acceso a SQLite (`node:sqlite`). |
 | `seed.ts` | Datos iniciales (proveedor simulado, dos departamentos, cinco agentes). |
 | `companions.ts` | Especies de compis, niveles (100 de experiencia por nivel) y fases de evolución. |
@@ -48,7 +51,11 @@
 - **peers**: oficinas conectadas (nombre, dirección, token y sentido de la conexión).
 - **remote_tasks**: encargos enviados a otras oficinas y su resultado.
 
-Los agentes guardan además `node_id` (dónde se ejecutan) y las tareas `origin` (oficina que las encargó, si vienen de fuera).
+- **projects**: nombre, carpeta (relativa a `/workspace`) y descripción.
+- **connections**: herramienta externa, comando y credenciales (variables de entorno, en JSON).
+- **sessions**: agente, proyecto, tipo de cerebro, servidor, id de la sesión en el CLI, estado (`open` o `closed`), título, número de turnos e historial reciente.
+
+Los agentes guardan además `node_id` (dónde se ejecutan), `project_id`, `access` (`read`, `edit` o `full`) y `connections` (ids), y las tareas `origin` (oficina que las encargó, si vienen de fuera).
 
 ### Simulación
 
@@ -56,7 +63,11 @@ El servidor es la autoridad. Cada 80 ms mueve a los actores por su camino y, si 
 
 ### Runtime de un agente
 
-Cada agente tiene una **cadena serie de acciones** (`enqueue`): tareas, reuniones y visitas se ejecutan de una en una, en orden. Las esperas interrumpibles (descansos, visitas al despacho) se cortan cuando llega trabajo nuevo. El chat va por fuera de la cadena para que un agente pueda contestarte aunque esté ocupado.
+Cada agente tiene una **cadena serie de acciones** (`enqueue`): tareas, reuniones y visitas se ejecutan de una en una, en orden. Las esperas interrumpibles (descansos, visitas al despacho) se cortan cuando llega trabajo nuevo. El chat va por fuera de esa cadena, pero comparte con las tareas la **cadena de pensamiento** (`think`): las llamadas que usan la sesión del agente van de una en una, así que si le hablas mientras trabaja te contesta al terminar.
+
+### Trabajo, permisos y sesiones
+
+Cada llamada al LLM lleva un `work` con la carpeta del proyecto, los permisos, las credenciales de sus conexiones (como variables de entorno), los comandos que puede ejecutar y, en chat y tareas, la sesión. El worker sigue sin estado: crea la carpeta si no existe y ejecuta ahí el CLI o el bucle de herramientas. Lo que guarda una sesión vive en dos sitios: el historial reciente en la base de datos de la oficina y, para Claude Code y Codex, su propia sesión en `agent-home` del servidor.
 
 Cuando la cadena queda vacía, el agente vuelve a su mesa y, pasado un rato, hace vida de oficina (café, charla con un compañero, paseo). Esa vida ociosa está guionizada: **no gasta tokens**.
 
@@ -82,9 +93,9 @@ Cada worker abre un WebSocket hacia la oficina: el local a `/internal/node` (no 
 
 `complete()` en `llm.ts` decide la ruta de cada trabajo: si el agente tiene un servidor remoto asignado, se le envía por su WebSocket y se espera el resultado; si no, va a la cola de BullMQ como siempre. Si el servidor está desconectado, el trabajo falla con un mensaje claro en lugar de ejecutarse en otro sitio.
 
-### Inicio de sesión en los CLIs
+### Instalación e inicio de sesión de herramientas
 
-La interfaz pide una acción de una lista cerrada (`claude-login`, `claude-logout`, `codex-login`, `codex-logout`). La oficina la reenvía al servidor elegido, que lanza el comando dentro de un pseudoterminal (`script`) y transmite la salida; lo que escribe el usuario (el código de autorización) viaja de vuelta. Al terminar, el servidor vuelve a comprobar el estado de las sesiones.
+La interfaz pide una herramienta del catálogo y una acción (`login`, `logout` o `install`). La oficina comprueba que el catálogo la define y la reenvía al servidor elegido, que saca el comando del mismo catálogo, lo lanza dentro de un pseudoterminal (`script`) y transmite la salida; lo que escribe el usuario (el código de autorización) viaja de vuelta. Al terminar, el servidor vuelve a comprobar qué herramientas tiene instaladas y con sesión. Lo instalado va a `/home/node/.local` y las sesiones a `/home/node`, ambos en el volumen `agent-home`.
 
 ### Enlace entre oficinas
 
@@ -102,11 +113,15 @@ Las rutas de una oficina se sirven bajo `/o/<puerto>` (por ejemplo `GET /o/3101/
 | `POST/DELETE /api/hub/links` | Centralita: enlazar o desenlazar dos oficinas de la instalación. |
 | `PUT /api/layout` | Aplicar un plano (`{layout}`) o volver al de serie (`{reset: true}`). Responde con el mapa compilado o `400` con el motivo. |
 | `GET /api/summary` | Resumen de la oficina para la centralita. |
-| `GET /api/bootstrap` | Estado completo inicial (mapa, actores, agentes, departamentos, proveedores, ajustes, tareas, feed, trabajos). |
+| `GET /api/bootstrap` | Estado completo inicial (mapa, actores, agentes, departamentos, proveedores, ajustes, tareas, feed, trabajos, proyectos, conexiones, sesiones y catálogo de herramientas). |
 | `POST/PATCH/DELETE /api/agents[/:id]` | Contratar, editar, despedir. |
 | `GET /api/agents/:id/messages`, `POST /api/agents/:id/chat` | Conversación. |
 | `POST /api/agents/:id/tasks` | Encargar una tarea. |
 | `POST /api/agents/:id/summon`, `/dismiss` | Llamar al despacho / mandar a su mesa. |
+| `POST /api/agents/:id/session/new` | Archivar la sesión en curso del agente para que empiece de cero. |
+| `POST/PATCH/DELETE /api/projects[/:id]` | Proyectos (la carpeta se deriva del nombre y no cambia). |
+| `POST/PATCH/DELETE /api/connections[/:id]` | Conexiones con herramientas externas. Las credenciales entran pero nunca salen. |
+| `POST /api/sessions/:id/open`, `/close`, `DELETE /api/sessions/:id` | Continuar, archivar u olvidar una sesión. |
 | `POST/PATCH/DELETE /api/teams[/:id]`, `POST /api/teams/:id/tasks` | Departamentos y encargos de equipo. |
 | `POST/PATCH/DELETE /api/providers[/:id]`, `POST /api/providers/:id/test` | Proveedores y prueba de conexión. |
 | `PATCH /api/settings` | Perfil del jefe, proveedor por defecto, nombre de la oficina y dirección de enlace. |
@@ -114,7 +129,7 @@ Las rutas de una oficina se sirven bajo `/o/<puerto>` (por ejemplo `GET /o/3101/
 | `POST /api/offices/invite`, `/join`, `DELETE /api/offices/:id`, `POST /api/offices/:id/tasks` | Conexión entre oficinas y encargos remotos. |
 | `WS /link/node`, `WS /link/office`, `GET /link/health` | Puerto de enlace: servidores remotos y otras oficinas (con token). |
 | `GET /api/tasks`, `GET /api/jobs` | Tareas y trabajos en segundo plano. |
-| `WS /ws` | Servidor → cliente: `state`, `agents`, `teams`, `providers`, `settings`, `message`, `task`, `feed`, `jobs`, `delivery`, `levelup`, `arrived`, `nodes`, `offices`, `visitors`, `dialog`, `term`, `term-exit`. Cliente → servidor: `go`, `step` (teclado), `say`, `term-start`, `term-input`, `term-kill`. |
+| `WS /ws` | Servidor → cliente: `state`, `agents`, `teams`, `providers`, `settings`, `message`, `task`, `feed`, `jobs`, `delivery`, `levelup`, `arrived`, `nodes`, `offices`, `visitors`, `projects`, `connections`, `sessions`, `dialog`, `term`, `term-exit`. Cliente → servidor: `go`, `step` (teclado), `say`, `term-start`, `term-input`, `term-kill`. |
 
 ### Experiencia y niveles
 
@@ -147,6 +162,6 @@ Al aplicar un plano (`applyLayout` en `brain.ts`) se recolocan los actores que h
 | `game/creature.ts` | Las ocho especies de compis y su dibujo en tres fases. |
 | `store.ts` | Estado global mínimo (`useSyncExternalStore`) y `world` (actores interpolados, fuera de React). |
 | `net.ts` | REST y WebSocket contra la oficina elegida (`/o/<puerto>`), API de la centralita, cambio de oficina y acciones (`go`, `selectAgent`). |
-| `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. `ui/Companions.tsx` reúne la elección inicial, el álbum, la barra de experiencia y el cuadro de diálogo. `ui/Servers.tsx` muestra los servidores y el inicio de sesión guiado; `ui/OfficesModal.tsx`, el panel de oficinas; `ui/Architect.tsx`, el panel del modo arquitecto. |
+| `ui/*` | Barra superior, lista de equipo, panel del agente, editor de agente y aspecto, departamentos, tareas, ajustes y proveedores. `ui/Companions.tsx` reúne la elección inicial, el álbum, la barra de experiencia y el cuadro de diálogo. `ui/Servers.tsx` muestra los servidores y el inicio de sesión guiado de cualquier herramienta; `ui/Tools.tsx`, las conexiones; `ui/ProjectsModal.tsx`, el archivo de proyectos y sesiones; `ui/OfficesModal.tsx`, el panel de oficinas; `ui/Architect.tsx`, el panel del modo arquitecto. |
 
 El orden de pintado es por profundidad (coordenada Y de la base de cada pared, mueble o personaje), lo que da la sensación de vista 3/4: un agente sentado queda detrás de su mesa y quien está al norte de una pared queda tapado por ella.

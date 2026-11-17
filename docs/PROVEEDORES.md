@@ -34,12 +34,12 @@ Los contenedores llegan a tu máquina por `host.docker.internal`. En Ollama, el 
 
 ## Agentes CLI
 
-Se ejecutan como subproceso dentro del contenedor `worker`, con el prompt por la entrada estándar y `/workspace` (volumen) como directorio de trabajo.
+Se ejecutan como subproceso dentro del contenedor `worker`, con el prompt por la entrada estándar y la carpeta del proyecto del agente (dentro del volumen `/workspace`) como directorio de trabajo. Las opciones de permisos y de sesión dependen del agente: ver la decisión 19 y la 21 en [DECISIONES.md](DECISIONES.md).
 
 | Proveedor | Comando | Credenciales |
 |---|---|---|
-| Claude Code | `claude -p --output-format text [--model …]` | Sesión iniciada desde **Servidores y sesiones** (recomendado). Alternativas: token de `claude setup-token` o API key de Anthropic, en el campo de la interfaz o en `.env`. |
-| Codex | `codex exec --skip-git-repo-check --sandbox read-only -o <fichero> [-m …] -` | Sesión iniciada desde **Servidores y sesiones** con el código de dispositivo (recomendado). Alternativa: API key de OpenAI en el campo o en `.env`. |
+| Claude Code | `claude -p --output-format text [--model …]` + permisos + `--session-id`/`--resume` | Sesión iniciada desde **Servidores y sesiones** (recomendado). Alternativas: token de `claude setup-token` o API key de Anthropic, en el campo de la interfaz o en `.env`. |
+| Codex | `codex exec [resume <id>] --skip-git-repo-check --json -o <fichero> -c sandbox_mode=… [-m …] -` | Sesión iniciada desde **Servidores y sesiones** con el código de dispositivo (recomendado). Alternativa: API key de OpenAI en el campo o en `.env`. |
 | Comando propio | `sh -c "<tu comando>"` | Las que necesite tu comando; debe estar instalado en la imagen. |
 
 Son más lentos que una API (arrancan un agente completo por llamada) pero permiten usar una suscripción en lugar de pago por token. Con `INSTALL_AGENT_CLIS=false` no se instalan.
@@ -53,6 +53,10 @@ Si en Codex el inicio con código de dispositivo aparece deshabilitado, actíval
 ### Dónde se ejecuta cada agente
 
 Un agente usa el proveedor configurado, pero la llamada sale desde el servidor que tenga asignado. Para un modelo local en una máquina remota, crea un proveedor que apunte a `http://host.docker.internal:11434/v1` (visto desde ese servidor) y asigna los agentes a ese servidor. «Guardar y probar» permite elegir desde qué servidor se prueba.
+
+## Herramientas para modelos por API
+
+Los proveedores `anthropic` y `openai` (incluidos los modelos locales) reciben herramientas de la oficina para trabajar en la carpeta del proyecto: `list_files`, `read_file` y `search`; con permiso para editar, `write_file`, `replace_in_file` y `run_tool` (los comandos de sus herramientas externas, sin shell); con libertad total, `shell`. Hacen falta modelos con *tool calling*: si el servidor rechaza las herramientas, la oficina repite la llamada sin ellas y el agente solo contesta con texto.
 
 ## Cerebro simulado
 

@@ -29,7 +29,7 @@ export interface Furniture {
   w: number;
   h: number;
   block: boolean;
-  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices';
+  interact?: 'llm' | 'hire' | 'tasks' | 'coffee' | 'offices' | 'projects';
   label?: string;
   spot?: Cell;
 }
@@ -191,7 +191,7 @@ function compile(layout: Layout): Compiled {
       for (const c of [[x + 4, y + 3], [x + 3, y + 3], [x + 5, y + 3], [x + 2, y + 4], [x + 6, y + 4]] as Cell[]) if (keep(c)) bossVisitors.push(c);
       put(`${p}-rug`, 'rug', x + 2, y + 4, 5, Math.min(3, h - 5), { block: false });
       decor('plant', 'plant', x, y);
-      decor('shelf', 'bookshelf', x + w - 3, y, 3, 1);
+      put(first ? 'archive' : `${p}-archive`, 'bookshelf', x + w - 3, y, 3, 1, { interact: 'projects', label: 'Archivo · Proyectos y sesiones', spot: [x + w - 2, y + 1] }, true);
       if (h >= 8) decor('sofa', 'sofa', x, y + 4, 1, 3);
       decor('plant2', 'plant', x + w - 1, y + h - 1);
     } else if (r.kind === 'meeting') {

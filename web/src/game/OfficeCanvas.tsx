@@ -26,6 +26,7 @@ export function runInteraction(f: Furniture) {
   else if (f.interact === 'hire') setState({ modal: { kind: 'people' } });
   else if (f.interact === 'tasks') setState({ modal: { kind: 'tasks' } });
   else if (f.interact === 'offices') setState({ modal: { kind: 'offices' } });
+  else if (f.interact === 'projects') setState({ modal: { kind: 'projects' } });
   else if (f.interact === 'coffee') sayAsPlayer('☕ Mmm, café');
 }
 

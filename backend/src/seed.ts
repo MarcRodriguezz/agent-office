@@ -139,7 +139,7 @@ export function staff(templateId: string): Agent[] {
     else leads[p.team] ??= id;
     return store.saveAgent({
       id, name: p.name, role: p.role, personality: p.personality, instructions: p.instructions ?? '', providerId: null, model: '',
-      teamId: p.team === MANAGER ? null : teams[p.team].id, nodeId: null, appearance: p.look, desk,
+      teamId: p.team === MANAGER ? null : teams[p.team].id, nodeId: null, projectId: null, access: 'read', connections: [], appearance: p.look, desk,
       companion: { species: p.species, name: SPECIES[p.species] }, xp: p.xp ?? 0, createdAt: Date.now() + desk,
     });
   });

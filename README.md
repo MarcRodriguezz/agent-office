@@ -40,6 +40,7 @@ Para parar: `docker compose down` (los datos se conservan en volúmenes; `docker
 | Cambiar de oficina | Pulsa el nombre de la oficina, arriba a la izquierda. |
 | Abrir, enlazar o eliminar oficinas | **Oficinas → Mis oficinas**. |
 | Cambiar el plano | **Arquitecto**: mueve y redimensiona salas, abre puertas, añade departamentos, despachos y salas. |
+| Darle un proyecto, permisos y herramientas | **Archivo** de tu despacho (botón *Proyectos*) para los proyectos y sus sesiones; **Modelos y ajustes → Herramientas** para GitHub, Cloudflare…; y la sección *Trabajo* al editar el agente. |
 | Poner agentes en otro servidor | **Servidores y sesiones → Añadir un servidor remoto**, y elige «Dónde se ejecuta» al editar el agente. |
 | Conectar con una oficina de otro equipo | **Oficinas → Oficinas de fuera**: una crea la invitación y la otra la pega. |
 | Ver las ejecuciones en segundo plano | Indicador de la barra superior o pestaña **Actividad**. |
@@ -60,6 +61,15 @@ Al entrar por primera vez eliges a tu compi entre ocho especies originales (Brot
 
 Cada 100 puntos se sube un nivel. Los compis evolucionan en los niveles 3 y 6, y el álbum va descubriendo las formas que alcanza alguien de la oficina.
 
+## Proyectos, permisos y herramientas externas
+
+Los agentes no solo escriben texto: trabajan sobre ficheros y usan herramientas de terminal, con cualquier cerebro (API, modelo local o CLI).
+
+- **Proyectos.** En el **Archivo** (la estantería de tu despacho o el botón *Proyectos*) creas un proyecto: es una carpeta en `/workspace` del servidor donde trabaja el agente. Desde ahí eliges quién trabaja en él.
+- **Permisos.** Al editar un agente eliges *Solo lectura* (consulta, no cambia nada), *Editar* (crea y modifica ficheros y usa sus herramientas externas) o *Libertad total* (cualquier comando, sin preguntar). Todo ocurre dentro del contenedor del worker.
+- **Herramientas externas.** En **Modelos y ajustes → Herramientas** conectas GitHub, Cloudflare, Vercel, Netlify o cualquier otro CLI que lea sus credenciales de variables de entorno. Puedes pegar un token o, en GitHub, iniciar sesión con un código como en Codex. Lo que instales y las sesiones que inicies se conservan entre reinicios. En cada agente marcas qué herramientas puede usar: lo normal es un agente o departamento por herramienta.
+- **Sesiones.** Cada agente recuerda lo hablado y hecho en su proyecto. En el Archivo ves las sesiones, las archivas para empezar de cero o continúas una anterior. En el panel del agente tienes *Empezar de cero*.
+
 ## Iniciar sesión con tu cuenta (Claude Code y Codex)
 
 No hace falta copiar tokens a mano. En **LLM y ajustes → Servidores y sesiones** cada servidor muestra si Claude Code y Codex tienen sesión:
@@ -67,7 +77,7 @@ No hace falta copiar tokens a mano. En **LLM y ajustes → Servidores y sesiones
 - **Claude Code**: pulsa *Iniciar sesión*, abre el enlace, autoriza y pega en la oficina el código que te da la página.
 - **Codex**: pulsa *Iniciar sesión*, abre el enlace e introduce el código de un solo uso que aparece; la oficina detecta sola cuándo terminas.
 
-La sesión se guarda en un volumen (`agent-home`), así que sobrevive a reinicios y reconstrucciones. Después conecta el proveedor «Claude Code» o «Codex CLI» en *Proveedores LLM* y márcalo por defecto.
+Lo mismo sirve para GitHub y las demás herramientas del catálogo. La sesión se guarda en un volumen (`agent-home`), así que sobrevive a reinicios y reconstrucciones. Después conecta el proveedor «Claude Code» o «Codex CLI» en *Proveedores LLM* y márcalo por defecto.
 
 ## Servidores remotos
 
