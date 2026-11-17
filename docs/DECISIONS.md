@@ -1,6 +1,6 @@
 # Design decisions
 
-Record of the decisions taken, with their reason and what was discarded. Decisions 1 to 12: 2026-11-13. Decisions 13 to 15: 2026-11-16. Decisions 19 to 26: 2026-11-17.
+Record of the decisions taken, with their reason and what was discarded. Decisions 1 to 12: 2026-11-13. Decisions 13 to 15: 2026-11-16. Decisions 19 to 27: 2026-11-17.
 
 ## 1. What the product is
 
@@ -282,6 +282,14 @@ Record of the decisions taken, with their reason and what was discarded. Decisio
 **Reason:** the demo was deployed by hand and could fall behind the code. Now the public link always matches `main`, and a pull request that breaks the types or the demo build is caught before merging.
 
 **Details:** the demo is the only thing deployed: the full office runs locally with Docker and is never published (decision 10). Credentials live in repository secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), never in the repository.
+
+## 27. Public repository under a source-available license
+
+**Decision:** the repository is published under its own source-available license: anyone can read the code, use the official demo and fork it on GitHub only to contribute. Any other use (running it for themselves, hosting it, redistributing it, building a product on it or training models with it) needs written permission. Contributors grant the author a license to use their contributions.
+
+**Reason:** the project is shown publicly and outside help is welcome, but the author keeps control over its use. Open source licenses (MIT, Apache, GPL) all allow free use and redistribution, so none of them fit.
+
+**Details:** GitHub always allows forking a public repository, so forks cannot be blocked technically; the license limits what a fork may be used for. `CONTRIBUTING.md`, `SECURITY.md` and the issue and pull request templates describe how to take part.
 
 ## Known limitations and next steps
 

@@ -1,0 +1,81 @@
+Agent Office Source-Available License
+Version 1.0
+
+Copyright (c) 2026 Marc Rodriguez. All rights reserved.
+
+This repository is published so that people can read it, try the official
+demo and help improve it. It is not open source. Except for the limited
+permissions below, no rights are granted to anyone.
+
+1. What you may do
+
+   a. Read and review the source code on GitHub.
+
+   b. Use the official public demo at https://agent-office-5cj.pages.dev.
+
+   c. Fork this repository on GitHub, clone it and run it on your own
+      machine, solely to prepare, test and submit contributions (issues and
+      pull requests) to the official repository at
+      https://github.com/MarcRodriguezz/agent-office. Delete any fork or copy
+      once it is no longer needed for that purpose.
+
+2. What you may not do without prior written permission from the copyright
+   holder
+
+   a. Use, run, deploy or host the software, or any part or derivative of
+      it, for any purpose other than the one described in 1.c, whether
+      personal, internal, educational or commercial.
+
+   b. Copy, modify, merge, publish, distribute, sublicense, sell or
+      otherwise make available the software, any part of it or any
+      derivative work, including through forks kept for any purpose other
+      than the one described in 1.c.
+
+   c. Use the software, its code, its documentation or its design to build
+      or offer a competing product or service.
+
+   d. Use the contents of this repository to train, fine-tune or evaluate
+      machine learning models.
+
+   e. Remove or alter this license or any copyright notice.
+
+3. Contributions
+
+   By submitting a contribution (code, documentation, designs, issues or
+   any other material) to the official repository, you confirm that you
+   have the right to do so, and you grant the copyright holder a perpetual,
+   worldwide, non-exclusive, royalty-free, irrevocable license to use,
+   copy, modify, publish, distribute, sublicense and relicense that
+   contribution as part of the software or otherwise. You keep the
+   copyright of your contribution. Contributors receive no rights to the
+   software beyond those in section 1.
+
+4. GitHub
+
+   Nothing in this license limits the rights that the GitHub Terms of
+   Service grant to GitHub users to view and fork public repositories
+   within GitHub. Those rights do not include any of the uses listed in
+   section 2.
+
+5. Third-party components
+
+   Third-party dependencies are distributed under their own licenses. This
+   license only covers the original work in this repository.
+
+6. Termination
+
+   Any use outside these terms ends every permission granted by this
+   license immediately and automatically.
+
+7. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES
+   OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+   OTHER DEALINGS IN THE SOFTWARE.
+
+For any use not covered here, contact the copyright holder through
+https://github.com/MarcRodriguezz.

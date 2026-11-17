@@ -1,5 +1,9 @@
 # 🏢 Agent Office
 
+[![Check and deploy demo](https://github.com/MarcRodriguezz/agent-office/actions/workflows/deploy-demo.yml/badge.svg)](https://github.com/MarcRodriguezz/agent-office/actions/workflows/deploy-demo.yml)
+[![Demo](https://img.shields.io/badge/demo-agent--office--5cj.pages.dev-e8590c)](https://agent-office-5cj.pages.dev)
+[![License: source-available](https://img.shields.io/badge/license-source--available-1c1b19)](LICENSE)
+
 A virtual office where every employee is an AI agent. You are the boss: you walk around the office, go to an agent's desk to talk, call them to your office, hand them work, and they come back with the result when they are done. Agents are organised in departments, hold meetings, split tasks among themselves and work in the background with the LLM you choose (cloud, local, or a CLI such as Claude Code or Codex).
 
 It also has the soul of a creature RPG: everyone in the office (you included) has an original **compi** that follows them around, earns experience from delivered work, levels up and evolves.
@@ -20,6 +24,8 @@ docker compose up -d --build
 ```
 
 Open **http://localhost:8080**.
+
+Running your own installation is meant for contributors preparing a change, or for anyone with written permission: see [License](#license).
 
 The office starts with five agents, two departments and a **mock brain** (no LLM), so you can try it without any API key. To make them really think, connect a provider from your computer (in your office) or from the console in the server room.
 
@@ -206,3 +212,13 @@ The link port is the only thing meant to be opened to other machines: it only ac
 ## Status
 
 First version. Known limitations and next steps in [docs/DECISIONS.md](docs/DECISIONS.md#known-limitations-and-next-steps).
+
+## Contributing
+
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first, and report security problems privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Agent Office is **source-available, not open source**. You can read the code, use the [official demo](https://agent-office-5cj.pages.dev) and fork it on GitHub only to contribute back to this repository. Using, hosting, redistributing or building on it requires written permission. See [LICENSE](LICENSE).
+
+Copyright (c) 2026 Marc Rodriguez. All rights reserved.
