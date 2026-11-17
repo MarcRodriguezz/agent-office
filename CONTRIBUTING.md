@@ -49,7 +49,7 @@ cd ../web && npm ci && npm run build:demo && npx vite preview --outDir dist-demo
 1. Keep each pull request to one change, and each commit to one logical step with a title that describes a feature.
 2. Make sure the checks pass. CI runs them on every pull request:
    ```bash
-   cd backend && npx tsc -p . --noEmit
+   cd backend && npx tsc -p . --noEmit && npm test
    cd ../web && npx tsc --noEmit && npm run build:demo
    ```
 3. Try your change in the browser and describe how you tested it.

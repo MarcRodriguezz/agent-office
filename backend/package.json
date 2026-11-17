@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc -p .",
     "server": "node dist/gateway.js",
-    "worker": "node dist/worker.js"
+    "worker": "node dist/worker.js",
+    "test": "tsc -p tsconfig.test.json && node --test --test-force-exit --experimental-test-module-mocks \"build-test/test/*.test.js\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",

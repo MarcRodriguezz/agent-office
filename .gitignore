@@ -9,3 +9,4 @@ skills-lock.json
 .playwright-mcp/
 dist-demo
 .wrangler
+build-test

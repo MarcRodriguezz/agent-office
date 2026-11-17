@@ -194,7 +194,7 @@ More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the reason behin
 
 ## Continuous integration and demo deploy
 
-`.github/workflows/deploy-demo.yml` runs on every push and pull request: it type checks the backend and the frontend and builds the browser demo. On `main` it then deploys the demo to Cloudflare Pages (project `agent-office`), so https://agent-office-5cj.pages.dev always shows the latest version. It can also be run by hand from the Actions tab.
+`.github/workflows/deploy-demo.yml` runs on every push and pull request: it type checks the backend and the frontend, runs the tests and builds the browser demo. On `main` it then deploys the demo to Cloudflare Pages (project `agent-office`), so https://agent-office-5cj.pages.dev always shows the latest version. It can also be run by hand from the Actions tab.
 
 It needs two repository secrets:
 

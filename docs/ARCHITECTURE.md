@@ -191,4 +191,15 @@ A saved plan without a fun zone gets one once at startup (`addFunRoom`), below t
 
 Drawing order is by depth (Y coordinate of the base of each wall, piece of furniture or character), which gives the 3/4 view: a seated agent stays behind its desk and whoever is north of a wall is hidden by it.
 
+## Tests
+
+`backend/test` uses the Node test runner, with no extra dependencies (`npm test` in `backend`). The tests are compiled with `tsconfig.test.json` into `build-test`, which is not part of the image. They cover:
+
+- **Permissions** (`agent-tools.test.ts`): which tools each level gets, that read and edit agents cannot leave the project folder, that edit agents only run their tools' commands and that only full freedom gets a shell.
+- **Floor plan** (`map.test.ts`): the default plan, overlapping, missing and isolated rooms, too few desks and adding a fun zone to an old plan.
+- **Catalogue and compis** (`catalogue.test.ts`): the closed command list, name validation, levels and species.
+- **The office end to end** (`office.test.ts`): a real office with a temporary database and the mock brain, replacing `llm.js` through `mock.module` so no Redis is needed. It runs a spec meeting with the boss stepping in, splits its work into tasks and checks that a party sends people dancing.
+
+CI runs them on every push and pull request before building the demo.
+
 The browser demo (`web/demo`, `vite build --mode demo`) runs this same backend inside the browser: it swaps the database, the queue, the hub, the nodes and the offices for in-memory versions and only thinks with the mock brain.

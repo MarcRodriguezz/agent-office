@@ -1,6 +1,6 @@
 # Design decisions
 
-Record of the decisions taken, with their reason and what was discarded. Decisions 1 to 12: 2026-11-13. Decisions 13 to 15: 2026-11-16. Decisions 19 to 27: 2026-11-17.
+Record of the decisions taken, with their reason and what was discarded. Decisions 1 to 12: 2026-11-13. Decisions 13 to 15: 2026-11-16. Decisions 19 to 28: 2026-11-17.
 
 ## 1. What the product is
 
@@ -290,6 +290,14 @@ Record of the decisions taken, with their reason and what was discarded. Decisio
 **Reason:** the project is shown publicly and outside help is welcome, but the author keeps control over its use. Open source licenses (MIT, Apache, GPL) all allow free use and redistribution, so none of them fit.
 
 **Details:** GitHub always allows forking a public repository, so forks cannot be blocked technically; the license limits what a fork may be used for. `CONTRIBUTING.md`, `SECURITY.md` and the issue and pull request templates describe how to take part.
+
+## 28. Tests with the Node test runner
+
+**Decision:** automated tests use `node:test` and run on the compiled code, with no test framework. The end-to-end test starts a real office with a temporary SQLite database and the mock brain, replacing the queue client (`llm.js`) with `mock.module`.
+
+**Reason:** the riskiest parts are the permission limits, the floor plan validation and the multi-agent flows. Testing them on the real code paths, without Redis or a model, keeps the tests fast (about 30 seconds) and free, and avoids adding dependencies.
+
+**Details:** module mocking is still experimental in Node 24, so the test script enables it with `--experimental-test-module-mocks`. The interface is not covered by automated tests yet.
 
 ## Known limitations and next steps
 
