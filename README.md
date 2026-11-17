@@ -186,6 +186,17 @@ More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the reason behin
 | `INSTALL_AGENT_CLIS` | `true` | Installs `claude` and `codex` in the image. Set to `false` for a lighter image. |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` | empty | Credentials through the environment, as an alternative to saving them from the interface. |
 
+## Continuous integration and demo deploy
+
+`.github/workflows/deploy-demo.yml` runs on every push and pull request: it type checks the backend and the frontend and builds the browser demo. On `main` it then deploys the demo to Cloudflare Pages (project `agent-office`), so https://agent-office-5cj.pages.dev always shows the latest version. It can also be run by hand from the Actions tab.
+
+It needs two repository secrets:
+
+| Secret | Value |
+|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare account id (`npx wrangler whoami`). |
+| `CLOUDFLARE_API_TOKEN` | An API token with the *Cloudflare Pages: Edit* permission. |
+
 ## Security
 
 This is a **local, single-user** tool: there is no login and the port is only published on `127.0.0.1`. API keys saved from the interface are stored in the SQLite database in the `office-data` volume and are never sent back to the browser. Do not expose it to the Internet as is.

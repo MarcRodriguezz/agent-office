@@ -1,6 +1,6 @@
 # Design decisions
 
-Record of the decisions taken, with their reason and what was discarded. Decisions 1 to 12: 2026-11-13. Decisions 13 to 15: 2026-11-16. Decisions 19 to 25: 2026-11-17.
+Record of the decisions taken, with their reason and what was discarded. Decisions 1 to 12: 2026-11-13. Decisions 13 to 15: 2026-11-16. Decisions 19 to 26: 2026-11-17.
 
 ## 1. What the product is
 
@@ -274,6 +274,14 @@ Record of the decisions taken, with their reason and what was discarded. Decisio
 **Decision:** the README, the documents in `docs/`, the project skills and the commit messages are written in English. The interface and the prompts stay in Spanish.
 
 **Reason:** the repository is meant to be shown and shared; English makes it readable for more people. The office itself is still used in Spanish, so the documentation quotes the interface labels as they appear on screen.
+
+## 26. The demo deploys itself from GitHub Actions
+
+**Decision:** a single workflow type checks and builds the browser demo on every push and pull request, and deploys it to Cloudflare Pages when the push is on `main`. The deploy job only takes the built files from the check job.
+
+**Reason:** the demo was deployed by hand and could fall behind the code. Now the public link always matches `main`, and a pull request that breaks the types or the demo build is caught before merging.
+
+**Details:** the demo is the only thing deployed: the full office runs locally with Docker and is never published (decision 10). Credentials live in repository secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), never in the repository.
 
 ## Known limitations and next steps
 

@@ -1,0 +1,60 @@
+name: Check and deploy demo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: demo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            web/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: web
+      - run: npx tsc -p . --noEmit
+        working-directory: backend
+      - run: npx tsc --noEmit
+        working-directory: web
+      - run: npm run build:demo
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo
+          path: web/dist-demo
+          retention-days: 7
+
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: demo
+      url: https://agent-office-5cj.pages.dev
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: demo
+          path: dist-demo
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist-demo --project-name=agent-office --branch=main --commit-hash=${{ github.sha }}
