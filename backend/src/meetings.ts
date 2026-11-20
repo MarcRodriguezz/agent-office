@@ -6,6 +6,7 @@ import {
   ask, createTask, feed, gather, parsePlan, remember, runtimeAgent, speak, startTaskFor, titleOf,
 } from './brain.js';
 import type { Agent, Meeting, MeetingGoal, MeetingLine } from './types.js';
+import { m, N, t, tr } from './i18n.js';
 
 export const MEETING_LIMITS = { minPeople: 2, maxPeople: 8, maxRounds: 3 };
 const GATHER_MS = 60000;
@@ -22,13 +23,13 @@ let live: Live | null = null;
 const planning = new Set<string>();
 
 const GOAL_TEXT: Record<MeetingGoal, string> = {
-  discuss: 'Debatir el tema y llegar a decisiones concretas.',
-  spec: 'Definir entre todos una especificación: qué se construye, requisitos, decisiones técnicas, riesgos y quién hace qué.',
+  discuss: N('Debatir el tema y llegar a decisiones concretas.'),
+  spec: N('Definir entre todos una especificación: qué se construye, requisitos, decisiones técnicas, riesgos y quién hace qué.'),
 };
 
 const MINUTES_TEXT: Record<MeetingGoal, string> = {
-  discuss: 'Redacta el acta de la reunión en Markdown con estas secciones: ## Resumen, ## Decisiones, ## Siguientes pasos (cada uno con su responsable) y ## Temas abiertos.',
-  spec: 'Redacta la especificación acordada en Markdown, lista para usarla como documento de trabajo, con estas secciones: ## Objetivo, ## Alcance, ## Requisitos, ## Decisiones técnicas, ## Riesgos y dudas abiertas y ## Reparto del trabajo (quién hace qué). Básate en lo hablado; lo que no se decidió, márcalo como pendiente.',
+  discuss: N('Redacta el acta de la reunión en Markdown con estas secciones: ## Resumen, ## Decisiones, ## Siguientes pasos (cada uno con su responsable) y ## Temas abiertos.'),
+  spec: N('Redacta la especificación acordada en Markdown, lista para usarla como documento de trabajo, con estas secciones: ## Objetivo, ## Alcance, ## Requisitos, ## Decisiones técnicas, ## Riesgos y dudas abiertas y ## Reparto del trabajo (quién hace qué). Básate en lo hablado; lo que no se decidió, márcalo como pendiente.'),
 };
 
 export const meetingList = () => store.meetings();
@@ -48,8 +49,8 @@ function addLine(meeting: Meeting, speaker: string | null, text: string): Meetin
 const people = (meeting: Meeting) => meeting.agentIds.map(runtimeAgent).filter((a): a is Agent => !!a);
 
 function nameOf(id: string | null): string {
-  if (id === null) return `${store.setting('playerName', 'Jefe')} (jefe)`;
-  return runtimeAgent(id)?.name ?? store.agents().find((a) => a.id === id)?.name ?? 'Alguien';
+  if (id === null) return t('{v0} (jefe)', { v0: store.setting('playerName', t('Jefe')) });
+  return runtimeAgent(id)?.name ?? store.agents().find((a) => a.id === id)?.name ?? t('Alguien');
 }
 
 function chairOf(meeting: Meeting): Agent | undefined {
@@ -60,34 +61,34 @@ function chairOf(meeting: Meeting): Agent | undefined {
 }
 
 function transcript(meeting: Meeting): string {
-  if (!meeting.lines.length) return '(Nadie ha hablado todavía: abres tú la reunión.)';
+  if (!meeting.lines.length) return t('(Nadie ha hablado todavía: abres tú la reunión.)');
   return meeting.lines.slice(-40).map((l) => `${nameOf(l.speaker)}: ${l.text}`).join('\n\n');
 }
 
 function header(meeting: Meeting): string {
-  const boss = store.setting('playerName', 'Jefe');
+  const boss = store.setting('playerName', t('Jefe'));
   return [
-    `Estás en una reunión que ha convocado tu jefe, ${boss}. Participan:\n${people(meeting).map((a) => `- ${a.name}: ${a.role}`).join('\n')}`,
-    `Tema: ${meeting.title}`,
-    meeting.brief ? `Contexto que da el jefe:\n${meeting.brief}` : '',
-    `Objetivo: ${GOAL_TEXT[meeting.goal]}`,
+    t('Estás en una reunión que ha convocado tu jefe, {boss}. Participan:\n{v1}', { boss, v1: people(meeting).map((a) => `- ${a.name}: ${a.role}`).join('\n') }),
+    t('Tema: {title}', { title: meeting.title }),
+    meeting.brief ? t('Contexto que da el jefe:\n{brief}', { brief: meeting.brief }) : '',
+    t('Objetivo: {v0}', { v0: tr(GOAL_TEXT[meeting.goal]) }),
   ].filter(Boolean).join('\n\n');
 }
 
 function turnPrompt(meeting: Meeting, round: number): string {
   return [
     header(meeting),
-    `Ronda ${round} de ${meeting.rounds}.${round === meeting.rounds ? ' Es la última: cierra posturas y propón acuerdos.' : ''}`,
-    `Conversación hasta ahora:\n\n${transcript(meeting)}`,
-    'Te toca intervenir. Aporta desde tu rol en 2 a 5 frases: propuestas concretas, dudas o acuerdos. Responde a lo que hayan dicho los demás y, sobre todo, a lo que pida el jefe. No repitas lo ya dicho, no saludes ni te despidas y no uses encabezados. Escribe solo tu intervención, sin tu nombre delante.',
+    t('Ronda {round} de {rounds}.{v2}', { round, rounds: meeting.rounds, v2: round === meeting.rounds ? t(' Es la última: cierra posturas y propón acuerdos.') : '' }),
+    t('Conversación hasta ahora:\n\n{v0}', { v0: transcript(meeting) }),
+    t('Te toca intervenir. Aporta desde tu rol en 2 a 5 frases: propuestas concretas, dudas o acuerdos. Responde a lo que hayan dicho los demás y, sobre todo, a lo que pida el jefe. No repitas lo ya dicho, no saludes ni te despidas y no uses encabezados. Escribe solo tu intervención, sin tu nombre delante.'),
   ].join('\n\n');
 }
 
 function minutesPrompt(meeting: Meeting): string {
   return [
     header(meeting),
-    `Conversación completa:\n\n${transcript(meeting)}`,
-    `Has moderado la reunión. ${MINUTES_TEXT[meeting.goal]} Usa títulos, párrafos y listas; no uses tablas.`,
+    t('Conversación completa:\n\n{v0}', { v0: transcript(meeting) }),
+    t('Has moderado la reunión. {v0} Usa títulos, párrafos y listas; no uses tablas.', { v0: tr(MINUTES_TEXT[meeting.goal]) }),
   ].join('\n\n');
 }
 
@@ -100,7 +101,7 @@ async function run(state: Live) {
   const stopped = () => state.stop !== 'none';
   const room = gather(ids, map.meetingSeats, 'talking');
   state.release = room.release;
-  feed(`Reunión en marcha: «${meeting.title}»`);
+  feed(m('Reunión en marcha: «{title}»', { title: meeting.title }));
   try {
     await Promise.race([room.arrived, new Promise((r) => setTimeout(r, GATHER_MS))]);
     if (cancelled()) return;
@@ -114,35 +115,35 @@ async function run(state: Live) {
         speak(id, '💭 …', 120000);
         const text = (await ask(agent, 'meeting', turnPrompt(meeting, round))).trim();
         if (cancelled()) return;
-        addLine(meeting, id, text || 'Nada que añadir por mi parte.');
+        addLine(meeting, id, text || t('Nada que añadir por mi parte.'));
         speak(id, preview(text), 9000);
       }
     }
     if (cancelled()) return;
     const chair = chairOf(meeting);
-    if (!chair) throw new Error('No queda nadie en la reunión para redactar el acta.');
+    if (!chair) throw new Error(t('No queda nadie en la reunión para redactar el acta.'));
     meeting.status = 'writing';
     publish(meeting);
-    speak(chair.id, meeting.goal === 'spec' ? 'Redacto la especificación 📝' : 'Redacto el acta 📝', 120000);
+    speak(chair.id, meeting.goal === 'spec' ? t('Redacto la especificación 📝') : t('Redacto el acta 📝'), 120000);
     meeting.result = (await ask(chair, 'minutes', minutesPrompt(meeting))).trim();
     meeting.status = 'done';
     meeting.finishedAt = Date.now();
     publish(meeting);
-    speak(chair.id, '¡Listo! Os lo dejo en la reunión', 4000);
-    for (const agent of people(meeting)) remember(agent, `Reunión «${meeting.title}» (${GOAL_TEXT[meeting.goal]})`, meeting.result);
-    feed(`${chair.name} cierra la reunión «${meeting.title}»`);
+    speak(chair.id, t('¡Listo! Os lo dejo en la reunión'), 4000);
+    for (const agent of people(meeting)) remember(agent, t('Reunión «{title}» ({v1})', { title: meeting.title, v1: tr(GOAL_TEXT[meeting.goal]) }), meeting.result);
+    feed(m('{name} cierra la reunión «{title}»', { name: chair.name, title: meeting.title }));
   } catch (err) {
     meeting.status = 'failed';
     meeting.result = err instanceof Error ? err.message : String(err);
     meeting.finishedAt = Date.now();
     publish(meeting);
-    feed(`La reunión «${meeting.title}» no ha podido terminar`);
+    feed(m('La reunión «{title}» no ha podido terminar', { title: meeting.title }));
   } finally {
     if (cancelled() && OPEN.includes(meeting.status)) {
       meeting.status = 'cancelled';
       meeting.finishedAt = Date.now();
       publish(meeting);
-      feed(`Se suspende la reunión «${meeting.title}»`);
+      feed(m('Se suspende la reunión «{title}»', { title: meeting.title }));
     }
     room.release();
     if (live === state) live = null;
@@ -150,11 +151,11 @@ async function run(state: Live) {
 }
 
 export function startMeeting(input: { title: string; brief: string; goal: MeetingGoal; agentIds: string[]; rounds: number }): Meeting {
-  if (live) throw new Error(`Ya hay una reunión en curso: «${live.meeting.title}». Termínala antes de convocar otra.`);
+  if (live) throw new Error(t('Ya hay una reunión en curso: «{title}». Termínala antes de convocar otra.', { title: live.meeting.title }));
   const ids = [...new Set(input.agentIds)].filter((id) => runtimeAgent(id));
-  if (ids.length < MEETING_LIMITS.minPeople) throw new Error('Una reunión necesita al menos dos personas.');
+  if (ids.length < MEETING_LIMITS.minPeople) throw new Error(t('Una reunión necesita al menos dos personas.'));
   if (ids.length > Math.min(MEETING_LIMITS.maxPeople, map.meetingSeats.length)) {
-    throw new Error(`En la sala caben como mucho ${Math.min(MEETING_LIMITS.maxPeople, map.meetingSeats.length)} personas.`);
+    throw new Error(t('En la sala caben como mucho {v0} personas.', { v0: Math.min(MEETING_LIMITS.maxPeople, map.meetingSeats.length) }));
   }
   const meeting: Meeting = {
     id: randomUUID(), title: titleOf(input.title), brief: input.brief, goal: input.goal, agentIds: ids,
@@ -200,29 +201,29 @@ export function forgetMeeting(id: string): boolean {
 
 export async function meetingTasks(id: string): Promise<Meeting> {
   const meeting = store.meetings(500).find((m) => m.id === id);
-  if (!meeting || meeting.status !== 'done') throw new Error('La reunión todavía no tiene un documento final.');
-  if (meeting.taskIds.length || planning.has(id)) throw new Error('El trabajo de esta reunión ya está repartido.');
+  if (!meeting || meeting.status !== 'done') throw new Error(t('La reunión todavía no tiene un documento final.'));
+  if (meeting.taskIds.length || planning.has(id)) throw new Error(t('El trabajo de esta reunión ya está repartido.'));
   const team = people(meeting);
   const chair = chairOf(meeting);
-  if (!chair) throw new Error('No queda nadie de la reunión en la oficina.');
+  if (!chair) throw new Error(t('No queda nadie de la reunión en la oficina.'));
   planning.add(id);
   try {
     const raw = await ask(chair, 'plan', [
-      `De la reunión «${meeting.title}» salió este documento:\n\n${meeting.result}`,
-      `Personas que estaban en la reunión:\n${team.map((a) => `- id "${a.id}" · ${a.name} · ${a.role}`).join('\n')}`,
-      'Reparte el trabajo acordado entre ellas. Responde ÚNICAMENTE con JSON válido, sin texto alrededor, con esta forma:',
-      '{"subtasks":[{"agentId":"<id>","title":"título corto","description":"instrucciones completas y autocontenidas"}]}',
-      'Como máximo una tarea por persona y solo para quien tenga algo que hacer.',
+      t('De la reunión «{title}» salió este documento:\n\n{result}', { title: meeting.title, result: meeting.result }),
+      t('Personas que estaban en la reunión:\n{v0}', { v0: team.map((a) => t('- id "{id}" · {name} · {role}', { id: a.id, name: a.name, role: a.role })).join('\n') }),
+      t('Reparte el trabajo acordado entre ellas. Responde ÚNICAMENTE con JSON válido, sin texto alrededor, con esta forma:'),
+      t('{"subtasks":[{"agentId":"<id>","title":"título corto","description":"instrucciones completas y autocontenidas"}]}'),
+      t('Como máximo una tarea por persona y solo para quien tenga algo que hacer.'),
     ].join('\n\n'), { reports: team.map((a) => ({ id: a.id, name: a.name, role: a.role })) });
     const plan = parsePlan(raw, team);
-    if (!plan.length) throw new Error(`${chair.name} no ha sabido repartir el trabajo. Prueba otra vez o encárgalo a mano.`);
+    if (!plan.length) throw new Error(t('{name} no ha sabido repartir el trabajo. Prueba otra vez o encárgalo a mano.', { name: chair.name }));
     for (const item of plan) {
-      const task = createTask(item.agentId, null, item.title, `${item.description}\n\nContexto: documento de la reunión «${meeting.title}».\n\n${meeting.result}`);
+      const task = createTask(item.agentId, null, item.title, t('{description}\n\nContexto: documento de la reunión «{title}».\n\n{result}', { description: item.description, title: meeting.title, result: meeting.result }));
       meeting.taskIds.push(task.id);
       void startTaskFor(item.agentId, task);
     }
     publish(meeting);
-    feed(`Sale trabajo de la reunión «${meeting.title}» para ${plan.length} ${plan.length === 1 ? 'persona' : 'personas'}`);
+    feed(plan.length === 1 ? m('Sale trabajo de la reunión «{title}» para una persona', { title: meeting.title }) : m('Sale trabajo de la reunión «{title}» para {count} personas', { title: meeting.title, count: plan.length }));
     return meeting;
   } finally {
     planning.delete(id);
@@ -232,6 +233,6 @@ export async function meetingTasks(id: string): Promise<Meeting> {
 export function closeStaleMeetings() {
   for (const meeting of store.meetings(500)) {
     if (!OPEN.includes(meeting.status)) continue;
-    store.saveMeeting({ ...meeting, status: 'failed', result: 'Interrumpida por un reinicio del servidor.', finishedAt: Date.now() });
+    store.saveMeeting({ ...meeting, status: 'failed', result: t('Interrumpida por un reinicio del servidor.'), finishedAt: Date.now() });
   }
 }

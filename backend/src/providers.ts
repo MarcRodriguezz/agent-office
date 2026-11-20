@@ -7,6 +7,8 @@ import { randomUUID } from 'node:crypto';
 import { toolBox, workRoot, type ToolBox } from './agent-tools.js';
 import { mock } from './mock.js';
 import type { LlmJob, LlmMessage, LlmResult } from './types.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { setLangOverride, t, type Lang } from './i18n.js';
 
 const WORKSPACE = process.env.WORKSPACE_DIR ?? '/workspace';
 const API_TIMEOUT_MS = 5 * 60 * 1000;
@@ -48,7 +50,7 @@ async function anthropic(job: LlmJob): Promise<LlmResult> {
   try {
     for (let step = 0; ; step++) {
       const message = await send(step >= MAX_STEPS);
-      if (message.stop_reason === 'refusal') throw new Error('El modelo ha rechazado la petición.');
+      if (message.stop_reason === 'refusal') throw new Error(t('El modelo ha rechazado la petición.'));
       const uses = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
       if (message.stop_reason === 'tool_use' && uses.length && box && step < MAX_STEPS) {
         messages.push({ role: 'assistant', content: message.content });
@@ -58,14 +60,14 @@ async function anthropic(job: LlmJob): Promise<LlmResult> {
         continue;
       }
       const text = message.content.map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
-      if (!text) throw new Error('El modelo no ha devuelto texto.');
+      if (!text) throw new Error(t('El modelo no ha devuelto texto.'));
       return { text };
     }
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) throw new Error('Anthropic: API key inválida o ausente.');
-    if (err instanceof Anthropic.NotFoundError) throw new Error(`Anthropic: el modelo "${model}" no existe.`);
-    if (err instanceof Anthropic.RateLimitError) throw new Error('Anthropic: límite de peticiones alcanzado, inténtalo más tarde.');
-    if (err instanceof Anthropic.APIError) throw new Error(`Anthropic ${err.status ?? ''}: ${err.message}`);
+    if (err instanceof Anthropic.AuthenticationError) throw new Error(t('Anthropic: API key inválida o ausente.'));
+    if (err instanceof Anthropic.NotFoundError) throw new Error(t('Anthropic: el modelo "{model}" no existe.', { model }));
+    if (err instanceof Anthropic.RateLimitError) throw new Error(t('Anthropic: límite de peticiones alcanzado, inténtalo más tarde.'));
+    if (err instanceof Anthropic.APIError) throw new Error(t('Anthropic {v0}: {message}', { v0: err.status ?? '', message: err.message }));
     throw err;
   }
 }
@@ -89,7 +91,7 @@ async function openaiCompatible(job: LlmJob): Promise<LlmResult> {
         signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
     } catch (err) {
-      throw new Error(`No se pudo conectar con ${baseUrl}: ${err instanceof Error ? err.message : err}`);
+      throw new Error(t('No se pudo conectar con {baseUrl}: {v1}', { baseUrl, v1: err instanceof Error ? err.message : err }));
     }
     const body = await res.text();
     if (!res.ok && tools && step === 0 && /tool|function/i.test(body)) {
@@ -97,7 +99,7 @@ async function openaiCompatible(job: LlmJob): Promise<LlmResult> {
       messages[0].content = job.system;
       continue;
     }
-    if (!res.ok) throw new Error(`${provider.name} respondió ${res.status}: ${body.slice(0, 300)}`);
+    if (!res.ok) throw new Error(t('{name} respondió {status}: {v2}', { name: provider.name, status: res.status, v2: body.slice(0, 300) }));
     const message = JSON.parse(body)?.choices?.[0]?.message;
     const calls: any[] = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
     if (calls.length && box && tools) {
@@ -114,23 +116,23 @@ async function openaiCompatible(job: LlmJob): Promise<LlmResult> {
       continue;
     }
     const text = message?.content;
-    if (typeof text !== 'string' || !text.trim()) throw new Error('El modelo no ha devuelto texto.');
+    if (typeof text !== 'string' || !text.trim()) throw new Error(t('El modelo no ha devuelto texto.'));
     return { text: text.trim() };
   }
 }
 
 function flatten(job: LlmJob): string {
   const messages = normalize(job.messages);
-  const parts = [`[INSTRUCCIONES]\n${job.system}`];
-  if (messages.length === 1) parts.push(`[PETICIÓN]\n${messages[0].content}`);
+  const parts = [t('[INSTRUCCIONES]\n{system}', { system: job.system })];
+  if (messages.length === 1) parts.push(t('[PETICIÓN]\n{v0}', { v0: messages[0].content }));
   else {
-    parts.push(`[CONVERSACIÓN]\n${messages.map((m) => `${m.role === 'user' ? 'Jefe' : 'Tú'}: ${m.content}`).join('\n\n')}`);
-    parts.push('Responde ahora al último mensaje del jefe. Devuelve solo tu respuesta.');
+    parts.push(t('[CONVERSACIÓN]\n{v0}', { v0: messages.map((m) => `${m.role === 'user' ? t('Jefe') : t('Tú')}: ${m.content}`).join('\n\n') }));
+    parts.push(t('Responde ahora al último mensaje del jefe. Devuelve solo tu respuesta.'));
   }
   return parts.join('\n\n');
 }
 
-const resumed = (job: LlmJob) => `[CONTEXTO ACTUAL]\n${job.system}\n\n[PETICIÓN]\n${lastOf(job)}`;
+const resumed = (job: LlmJob) => t('[CONTEXTO ACTUAL]\n{system}\n\n[PETICIÓN]\n{v1}', { system: job.system, v1: lastOf(job) });
 
 function runCli(cmd: string, args: string[], input: string, job: LlmJob, extra: Record<string, string> = {}): Promise<string> {
   const cwd = cwdOf(job);
@@ -140,18 +142,18 @@ function runCli(cmd: string, args: string[], input: string, job: LlmJob, extra: 
     let errOut = '';
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(new Error(`${cmd}: tiempo de espera agotado.`));
+      reject(new Error(t('{cmd}: tiempo de espera agotado.', { cmd })));
     }, CLI_TIMEOUT_MS);
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (errOut += d));
     child.on('error', (err) => {
       clearTimeout(timer);
-      reject(new Error(`No se pudo ejecutar "${cmd}": ${err.message}`));
+      reject(new Error(t('No se pudo ejecutar "{cmd}": {message}', { cmd, message: err.message })));
     });
     child.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0 && out.trim()) resolve(out.trim());
-      else reject(new Error(`${cmd} terminó con código ${code}: ${(errOut || out).trim().slice(-400) || 'sin salida'}`));
+      else reject(new Error(t('{cmd} terminó con código {code}: {v2}', { cmd, code, v2: (errOut || out).trim().slice(-400) || t('sin salida') })));
     });
     child.stdin.on('error', () => {});
     child.stdin.end(input);
@@ -227,7 +229,7 @@ async function codex(job: LlmJob): Promise<LlmResult> {
         text = '';
       }
       text ||= events.text;
-      if (!text) throw new Error('Codex no ha devuelto texto.');
+      if (!text) throw new Error(t('Codex no ha devuelto texto.'));
       return { text, cliId: events.thread || resume || undefined };
     } finally {
       rmSync(outFile, { force: true });
@@ -244,11 +246,18 @@ async function codex(job: LlmJob): Promise<LlmResult> {
 }
 
 async function customCli(job: LlmJob): Promise<LlmResult> {
-  if (!job.provider.command.trim()) throw new Error('Este proveedor no tiene ningún comando configurado.');
+  if (!job.provider.command.trim()) throw new Error(t('Este proveedor no tiene ningún comando configurado.'));
   return { text: await runCli('sh', ['-c', job.provider.command], flatten(job), job) };
 }
 
-export async function runProvider(job: LlmJob): Promise<LlmResult> {
+const jobLang = new AsyncLocalStorage<Lang>();
+setLangOverride(() => jobLang.getStore());
+
+export function runProvider(job: LlmJob): Promise<LlmResult> {
+  return jobLang.run(job.lang ?? 'es', () => dispatch(job));
+}
+
+async function dispatch(job: LlmJob): Promise<LlmResult> {
   switch (job.provider.kind) {
     case 'anthropic':
       return anthropic(job);

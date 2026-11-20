@@ -3,6 +3,9 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isLang, tl, type Lang } from './i18n.js';
+
+const langOf = (req: { headers: Record<string, unknown> }): Lang => (isLang(req.headers['x-lang']) ? req.headers['x-lang'] : 'es');
 
 interface Entry {
   port: number;
@@ -37,10 +40,10 @@ save();
 
 const children = new Map<number, ChildProcess>();
 
-function start(entry: Entry, template = '') {
+function start(entry: Entry, template = '', lang = '') {
   const child = spawn(process.execPath, [serverEntry], {
     stdio: 'inherit',
-    env: { ...process.env, PORT: String(entry.port), DB_PATH: entry.db, LINK_PREFIX: `/o/${entry.port}`, OFFICE_TEMPLATE: template },
+    env: { ...process.env, PORT: String(entry.port), DB_PATH: entry.db, LINK_PREFIX: `/o/${entry.port}`, OFFICE_TEMPLATE: template, OFFICE_LANG: lang },
   });
   children.set(entry.port, child);
   child.on('exit', (code) => {
@@ -92,9 +95,9 @@ async function list() {
 
 const entryOf = (id: unknown) => registry.find((e) => String(e.port) === String(id));
 
-async function peerBetween(a: Entry, b: Entry) {
+async function peerBetween(a: Entry, b: Entry, lang: Lang) {
   const [sa, sb] = await Promise.all([summary(a.port), summary(b.port)]);
-  if (!sa || !sb) throw new Error('Una de las dos oficinas no responde ahora mismo.');
+  if (!sa || !sb) throw new Error(tl(lang, 'Una de las dos oficinas no responde ahora mismo.'));
   return sa.peers.find((p) => p.officeId === sb.officeId) ?? null;
 }
 
@@ -108,23 +111,23 @@ app.get('/api/hub/offices', async () => list());
 
 app.post('/api/hub/offices', async (req, reply) => {
   const name = text((req.body as any)?.name);
-  if (!name) return reply.code(400).send({ error: 'La oficina necesita un nombre.' });
-  if (registry.length >= MAX_OFFICES) return reply.code(409).send({ error: `Como mucho caben ${MAX_OFFICES} oficinas en esta instalación.` });
+  if (!name) return reply.code(400).send({ error: tl(langOf(req), 'La oficina necesita un nombre.') });
+  if (registry.length >= MAX_OFFICES) return reply.code(409).send({ error: tl(langOf(req), 'Como mucho caben {MAX_OFFICES} oficinas en esta instalación.', { MAX_OFFICES }) });
   let port = FIRST_PORT;
   while (registry.some((e) => e.port === port)) port++;
   const entry: Entry = { port, db: join(dataDir, 'offices', `${port}.db`), createdAt: Date.now() };
   registry.push(entry);
   save();
-  start(entry, text((req.body as any)?.template, 40) || 'product');
-  if (!(await ready(port))) return reply.code(500).send({ error: 'La oficina nueva no ha arrancado a tiempo.' });
+  start(entry, text((req.body as any)?.template, 40) || 'product', langOf(req));
+  if (!(await ready(port))) return reply.code(500).send({ error: tl(langOf(req), 'La oficina nueva no ha arrancado a tiempo.') });
   await call(port, 'PATCH', '/api/settings', { officeName: name });
   return { id: String(port) };
 });
 
 app.delete('/api/hub/offices/:id', async (req, reply) => {
   const entry = entryOf((req.params as { id: string }).id);
-  if (!entry) return reply.code(404).send({ error: 'Oficina no encontrada.' });
-  if (registry.length === 1) return reply.code(409).send({ error: 'No puedes eliminar la única oficina.' });
+  if (!entry) return reply.code(404).send({ error: tl(langOf(req), 'Oficina no encontrada.') });
+  if (registry.length === 1) return reply.code(409).send({ error: tl(langOf(req), 'No puedes eliminar la única oficina.') });
   await call(entry.port, 'POST', '/internal/close', {}).catch(() => null);
   await sleep(500);
   registry = registry.filter((e) => e !== entry);
@@ -140,9 +143,9 @@ app.delete('/api/hub/offices/:id', async (req, reply) => {
 app.post('/api/hub/links', async (req, reply) => {
   const a = entryOf((req.body as any)?.a);
   const b = entryOf((req.body as any)?.b);
-  if (!a || !b || a === b) return reply.code(400).send({ error: 'Elige dos oficinas distintas.' });
+  if (!a || !b || a === b) return reply.code(400).send({ error: tl(langOf(req), 'Elige dos oficinas distintas.') });
   try {
-    if (await peerBetween(a, b)) return { ok: true };
+    if (await peerBetween(a, b, langOf(req))) return { ok: true };
     const { token } = await call<{ token: string }>(a.port, 'POST', '/internal/invite', {});
     await call(b.port, 'POST', '/internal/join', { url: `http://127.0.0.1:${a.port}`, token });
     return { ok: true };
@@ -154,9 +157,9 @@ app.post('/api/hub/links', async (req, reply) => {
 app.delete('/api/hub/links', async (req, reply) => {
   const a = entryOf((req.query as any)?.a);
   const b = entryOf((req.query as any)?.b);
-  if (!a || !b) return reply.code(400).send({ error: 'Elige dos oficinas.' });
+  if (!a || !b) return reply.code(400).send({ error: tl(langOf(req), 'Elige dos oficinas.') });
   try {
-    const peer = await peerBetween(a, b);
+    const peer = await peerBetween(a, b, langOf(req));
     if (peer) await call(a.port, 'DELETE', `/api/offices/${peer.id}`);
     return { ok: true };
   } catch (err) {

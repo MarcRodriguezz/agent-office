@@ -7,7 +7,7 @@ import { complete, jobsState } from './llm.js';
 import { DEFAULT_LAYOUT, mapData } from './map.js';
 import { snapshot } from './sim.js';
 import {
-  applyLayout, assignTask, assignTeamTask, chat, dismiss, fire, hire, playerGo, playerSay, publishAgents,
+  applyLayout, switchLang, assignTask, assignTeamTask, chat, dismiss, fire, hire, playerGo, playerSay, publishAgents,
   playerStep, publishTeams, restaff, summon, updateAgent, visitorList, type GoTarget,
 } from './brain.js';
 import { createNode, isRemote, nodesState, refreshNode, removeNode, startTerm, termInput, termKill } from './nodes.js';
@@ -26,6 +26,7 @@ import { BIN, ENV_KEY, TOOLS, toolOf } from './tools.js';
 import { cancelMeeting, finishMeeting, forgetMeeting, interject, meetingList, meetingTasks, startMeeting } from './meetings.js';
 import { partyUntil, startParty } from './party.js';
 import type { Access, Provider, ProviderKind } from './types.js';
+import { isLang, lang, relabel, t, tr } from './i18n.js';
 
 const KINDS: ProviderKind[] = ['mock', 'anthropic', 'openai', 'claude-code', 'codex', 'cli'];
 const ACCESS: Access[] = ['read', 'edit', 'full'];
@@ -79,7 +80,7 @@ export function registerRoutes(app: FastifyInstance) {
     projects: store.projects(),
     connections: store.connections().map(publicConnection),
     sessions: sessionList(),
-    tools: TOOLS,
+    tools: TOOLS.map((tool) => ({ ...tool, summary: tr(tool.summary), fields: tool.fields?.map((f) => ({ ...f, label: tr(f.label) })) })),
     meetings: meetingList(),
     party: partyUntil(),
   }));
@@ -104,14 +105,14 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/agents', async (req, reply) => {
     const b = req.body as any;
-    if (!text(b.name) || !b.appearance) return reply.code(400).send({ error: 'Faltan el nombre o el aspecto.' });
+    if (!text(b.name) || !b.appearance) return reply.code(400).send({ error: t('Faltan el nombre o el aspecto.') });
     const agent = hire({
-      name: text(b.name, 40), role: text(b.role, 80) || 'Generalista', personality: text(b.personality),
+      name: text(b.name, 40), role: text(b.role, 80) || t('Generalista'), personality: text(b.personality),
       instructions: text(b.instructions), providerId: b.providerId || null, model: text(b.model, 120),
       teamId: b.teamId || null, nodeId: isRemote(b.nodeId) ? b.nodeId : null, appearance: b.appearance, companion: cleanCompanion(b.companion) ?? randomCompanion(),
       projectId: projectId(b.projectId), access: access(b.access), connections: connectionIds(b.connections),
     });
-    if (!agent) return reply.code(409).send({ error: 'No quedan mesas libres: amplía la oficina en el modo arquitecto.' });
+    if (!agent) return reply.code(409).send({ error: t('No quedan mesas libres: amplía la oficina en el modo arquitecto.') });
     return agent;
   });
 
@@ -129,7 +130,7 @@ export function registerRoutes(app: FastifyInstance) {
     const companion = cleanCompanion(b.companion);
     if (companion) patch.companion = companion;
     const agent = updateAgent(id, patch);
-    if (!agent) return reply.code(404).send({ error: 'Agente no encontrado.' });
+    if (!agent) return reply.code(404).send({ error: t('Agente no encontrado.') });
     if ('teamId' in patch) {
       for (const team of store.teams()) {
         if (team.leadId === id && team.id !== agent.teamId) store.saveTeam({ ...team, leadId: null });
@@ -140,14 +141,14 @@ export function registerRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/agents/:id', async (req, reply) => {
-    if (!fire((req.params as { id: string }).id)) return reply.code(404).send({ error: 'Agente no encontrado.' });
+    if (!fire((req.params as { id: string }).id)) return reply.code(404).send({ error: t('Agente no encontrado.') });
     publishSessions();
     return { ok: true };
   });
 
   app.post('/api/agents/:id/session/new', async (req, reply) => {
     const agent = store.agents().find((a) => a.id === (req.params as { id: string }).id);
-    if (!agent) return reply.code(404).send({ error: 'Agente no encontrado.' });
+    if (!agent) return reply.code(404).send({ error: t('Agente no encontrado.') });
     closeCurrent(agent);
     return { ok: true };
   });
@@ -155,7 +156,7 @@ export function registerRoutes(app: FastifyInstance) {
   app.post('/api/projects', async (req, reply) => {
     const b = req.body as any;
     const name = text(b.name, 60);
-    if (!name) return reply.code(400).send({ error: 'El proyecto necesita un nombre.' });
+    if (!name) return reply.code(400).send({ error: t('El proyecto necesita un nombre.') });
     const project = store.saveProject({ id: randomUUID(), name, folder: projectFolder(name), description: text(b.description, 2000), createdAt: Date.now() });
     publishProjects();
     return project;
@@ -163,7 +164,7 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.patch('/api/projects/:id', async (req, reply) => {
     const current = store.projects().find((p) => p.id === (req.params as { id: string }).id);
-    if (!current) return reply.code(404).send({ error: 'Proyecto no encontrado.' });
+    if (!current) return reply.code(404).send({ error: t('Proyecto no encontrado.') });
     const b = req.body as any;
     const project = store.saveProject({
       ...current,
@@ -199,8 +200,8 @@ export function registerRoutes(app: FastifyInstance) {
     const tool = toolOf(text(b.tool, 40));
     const bin = tool?.bin ?? text(b.bin, 40).toLowerCase();
     const name = text(b.name, 60) || tool?.name || '';
-    if (!name) return reply.code(400).send({ error: 'La conexión necesita un nombre.' });
-    if (bin && !BIN.test(bin)) return reply.code(400).send({ error: 'El comando solo puede llevar letras, números, puntos y guiones.' });
+    if (!name) return reply.code(400).send({ error: t('La conexión necesita un nombre.') });
+    if (bin && !BIN.test(bin)) return reply.code(400).send({ error: t('El comando solo puede llevar letras, números, puntos y guiones.') });
     const connection = store.saveConnection({ id: randomUUID(), name, tool: tool?.id ?? 'custom', bin, env: readEnv(b.env), createdAt: Date.now() });
     publishConnections();
     return publicConnection(connection);
@@ -208,10 +209,10 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.patch('/api/connections/:id', async (req, reply) => {
     const current = store.connections().find((c) => c.id === (req.params as { id: string }).id);
-    if (!current) return reply.code(404).send({ error: 'Conexión no encontrada.' });
+    if (!current) return reply.code(404).send({ error: t('Conexión no encontrada.') });
     const b = req.body as any;
     const bin = current.tool === 'custom' && typeof b.bin === 'string' ? text(b.bin, 40).toLowerCase() : current.bin;
-    if (bin && !BIN.test(bin)) return reply.code(400).send({ error: 'El comando solo puede llevar letras, números, puntos y guiones.' });
+    if (bin && !BIN.test(bin)) return reply.code(400).send({ error: t('El comando solo puede llevar letras, números, puntos y guiones.') });
     const connection = store.saveConnection({ ...current, name: text(b.name, 60) || current.name, bin, env: readEnv(b.env, current.env) });
     publishConnections();
     publishAgents();
@@ -229,20 +230,20 @@ export function registerRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/sessions/:id/close', async (req, reply) => {
-    if (!closeSession((req.params as { id: string }).id)) return reply.code(404).send({ error: 'Sesión no encontrada.' });
+    if (!closeSession((req.params as { id: string }).id)) return reply.code(404).send({ error: t('Sesión no encontrada.') });
     return { ok: true };
   });
 
   app.post('/api/sessions/:id/open', async (req, reply) => {
     const session = store.session((req.params as { id: string }).id);
     const agent = session && store.agents().find((a) => a.id === session.agentId);
-    if (!session || !agent) return reply.code(404).send({ error: 'Sesión no encontrada.' });
+    if (!session || !agent) return reply.code(404).send({ error: t('Sesión no encontrada.') });
     const provider = store.provider(agent.providerId ?? settings().defaultProviderId ?? '') ?? store.providers()[0];
     if (provider && provider.kind !== session.kind) {
-      return reply.code(409).send({ error: `Esta sesión se hizo con otro cerebro. Cambia el de ${agent.name} para continuarla.` });
+      return reply.code(409).send({ error: t('Esta sesión se hizo con otro cerebro. Cambia el de {name} para continuarla.', { name: agent.name }) });
     }
     if ((agent.nodeId ?? null) !== session.nodeId) {
-      return reply.code(409).send({ error: `Esta sesión vive en otro servidor. Cambia dónde se ejecuta ${agent.name} para continuarla.` });
+      return reply.code(409).send({ error: t('Esta sesión vive en otro servidor. Cambia dónde se ejecuta {name} para continuarla.', { name: agent.name }) });
     }
     reopenSession(session.id);
     if (agent.projectId !== session.projectId) updateAgent(agent.id, { projectId: session.projectId });
@@ -258,7 +259,7 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/meetings', async (req, reply) => {
     const b = req.body as any;
-    if (!text(b.title, 200)) return reply.code(400).send({ error: 'La reunión necesita un tema.' });
+    if (!text(b.title, 200)) return reply.code(400).send({ error: t('La reunión necesita un tema.') });
     try {
       return startMeeting({
         title: text(b.title, 200), brief: text(b.brief, 6000), goal: b.goal === 'spec' ? 'spec' : 'discuss',
@@ -272,17 +273,17 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/meetings/:id/say', async (req, reply) => {
     const line = interject((req.params as { id: string }).id, text((req.body as any).text, 2000));
-    if (!line) return reply.code(409).send({ error: 'Esta reunión ya no admite intervenciones.' });
+    if (!line) return reply.code(409).send({ error: t('Esta reunión ya no admite intervenciones.') });
     return line;
   });
 
   app.post('/api/meetings/:id/finish', async (req, reply) => {
-    if (!finishMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: 'Esta reunión ya está terminando.' });
+    if (!finishMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: t('Esta reunión ya está terminando.') });
     return { ok: true };
   });
 
   app.post('/api/meetings/:id/cancel', async (req, reply) => {
-    if (!cancelMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: 'Esta reunión no está en curso.' });
+    if (!cancelMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: t('Esta reunión no está en curso.') });
     return { ok: true };
   });
 
@@ -295,7 +296,7 @@ export function registerRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/meetings/:id', async (req, reply) => {
-    if (!forgetMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: 'No se puede borrar una reunión en curso.' });
+    if (!forgetMeeting((req.params as { id: string }).id)) return reply.code(409).send({ error: t('No se puede borrar una reunión en curso.') });
     return { ok: true };
   });
 
@@ -303,15 +304,15 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/agents/:id/chat', async (req, reply) => {
     const message = chat((req.params as { id: string }).id, text((req.body as any).text, 8000));
-    if (!message) return reply.code(404).send({ error: 'Agente no encontrado.' });
+    if (!message) return reply.code(404).send({ error: t('Agente no encontrado.') });
     return message;
   });
 
   app.post('/api/agents/:id/tasks', async (req, reply) => {
     const b = req.body as any;
-    if (!text(b.title)) return reply.code(400).send({ error: 'La tarea necesita un título.' });
+    if (!text(b.title)) return reply.code(400).send({ error: t('La tarea necesita un título.') });
     const task = assignTask((req.params as { id: string }).id, text(b.title, 200), text(b.description, 8000));
-    if (!task) return reply.code(404).send({ error: 'Agente no encontrado.' });
+    if (!task) return reply.code(404).send({ error: t('Agente no encontrado.') });
     return task;
   });
 
@@ -322,7 +323,7 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/teams', async (req, reply) => {
     const b = req.body as any;
-    if (!text(b.name)) return reply.code(400).send({ error: 'El departamento necesita un nombre.' });
+    if (!text(b.name)) return reply.code(400).send({ error: t('El departamento necesita un nombre.') });
     const team = store.saveTeam({ name: text(b.name, 40), color: text(b.color, 9) || '#4f8cff', mission: text(b.mission), leadId: null });
     publishTeams();
     return team;
@@ -331,7 +332,7 @@ export function registerRoutes(app: FastifyInstance) {
   app.patch('/api/teams/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const team = store.teams().find((t) => t.id === id);
-    if (!team) return reply.code(404).send({ error: 'Departamento no encontrado.' });
+    if (!team) return reply.code(404).send({ error: t('Departamento no encontrado.') });
     const b = req.body as any;
     const next = {
       ...team,
@@ -367,9 +368,9 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/teams/:id/tasks', async (req, reply) => {
     const b = req.body as any;
-    if (!text(b.title)) return reply.code(400).send({ error: 'La tarea necesita un título.' });
+    if (!text(b.title)) return reply.code(400).send({ error: t('La tarea necesita un título.') });
     const task = assignTeamTask((req.params as { id: string }).id, text(b.title, 200), text(b.description, 8000));
-    if (!task) return reply.code(409).send({ error: 'El departamento no tiene miembros todavía.' });
+    if (!task) return reply.code(409).send({ error: t('El departamento no tiene miembros todavía.') });
     return task;
   });
 
@@ -388,7 +389,7 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/providers', async (req, reply) => {
     const data = readProvider(req.body);
-    if (!data) return reply.code(400).send({ error: 'Faltan el nombre o el tipo del proveedor.' });
+    if (!data) return reply.code(400).send({ error: t('Faltan el nombre o el tipo del proveedor.') });
     const provider = store.saveProvider(data);
     if (!settings().defaultProviderId) store.setSetting('defaultProviderId', provider.id);
     publishProviders();
@@ -400,7 +401,7 @@ export function registerRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const current = store.provider(id);
     const data = current && readProvider(req.body, current);
-    if (!data) return reply.code(404).send({ error: 'Proveedor no encontrado.' });
+    if (!data) return reply.code(404).send({ error: t('Proveedor no encontrado.') });
     const provider = store.saveProvider({ ...data, id });
     publishProviders();
     return publicProvider(provider);
@@ -418,12 +419,12 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/providers/:id/test', async (req, reply) => {
     const provider = store.provider((req.params as { id: string }).id);
-    if (!provider) return reply.code(404).send({ error: 'Proveedor no encontrado.' });
+    if (!provider) return reply.code(404).send({ error: t('Proveedor no encontrado.') });
     const started = Date.now();
     try {
       const answer = await complete({
-        provider, system: 'Eres un asistente de pruebas de conexión.', intent: 'test', agentName: 'Prueba de conexión',
-        messages: [{ role: 'user', content: 'Responde únicamente con la palabra: OK' }],
+        provider, system: t('Eres un asistente de pruebas de conexión.'), intent: 'test', agentName: t('Prueba de conexión'),
+        messages: [{ role: 'user', content: t('Responde únicamente con la palabra: OK') }],
       }, text((req.body as any)?.nodeId, 80) || null);
       return { ok: true, ms: Date.now() - started, answer: answer.text.slice(0, 200) };
     } catch (err) {
@@ -441,6 +442,11 @@ export function registerRoutes(app: FastifyInstance) {
     if ('managerId' in b && (!b.managerId || store.agents().some((a) => a.id === b.managerId))) {
       store.setSetting('managerId', b.managerId || null);
       publishAgents();
+    }
+    if (isLang(b.lang) && b.lang !== lang()) {
+      switchLang(b.lang);
+      renameOffice(relabel(settings().officeName, b.lang));
+      publishProviders();
     }
     if (typeof b.officeName === 'string' && text(b.officeName)) renameOffice(text(b.officeName, 60));
     if (typeof b.linkUrl === 'string' && /^https?:\/\/\S+$/.test(text(b.linkUrl))) {
@@ -475,14 +481,14 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/nodes', async (req, reply) => {
     const name = text((req.body as any).name, 40);
-    if (!name) return reply.code(400).send({ error: 'El servidor necesita un nombre.' });
+    if (!name) return reply.code(400).send({ error: t('El servidor necesita un nombre.') });
     const node = createNode(name);
     return { id: node.id, ...nodeSetup(node.token) };
   });
 
   app.get('/api/nodes/:id/setup', async (req, reply) => {
     const node = store.nodes().find((n) => n.id === (req.params as { id: string }).id);
-    if (!node) return reply.code(404).send({ error: 'Servidor no encontrado.' });
+    if (!node) return reply.code(404).send({ error: t('Servidor no encontrado.') });
     return nodeSetup(node.token);
   });
 
@@ -522,7 +528,7 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/offices/:id/tasks', async (req, reply) => {
     const b = req.body as any;
-    if (!text(b.title)) return reply.code(400).send({ error: 'La tarea necesita un título.' });
+    if (!text(b.title)) return reply.code(400).send({ error: t('La tarea necesita un título.') });
     try {
       return sendRemoteTask((req.params as { id: string }).id, b.targetKind === 'team' ? 'team' : 'agent', text(b.targetId, 80), text(b.title, 200), text(b.description, 8000));
     } catch (err) {
