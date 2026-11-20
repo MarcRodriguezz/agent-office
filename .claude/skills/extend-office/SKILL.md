@@ -46,7 +46,7 @@ After touching `compile`, start the office and check through the API that the de
 curl -s -X PUT localhost:8080/o/3101/api/layout -H 'content-type: application/json' -d '{"reset":true}' | head -c 80
 ```
 
-An error returns `400` with the reason in Spanish. Then, in architect mode, add a room of the type you touched at its minimum size and at a large size, and check that agents reach their desks.
+An error returns `400` with the reason in the office language. Then, in architect mode, add a room of the type you touched at its minimum size and at a large size, and check that agents reach their desks.
 
 ## Compis
 

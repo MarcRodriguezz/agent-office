@@ -1,6 +1,6 @@
 # LLM providers
 
-They are configured from the interface (your computer in your office or the server room console). **Guardar y probar** runs a real call through the queue and shows the answer or the error.
+They are configured from the interface (your computer in your office or the server room console). **Save and test** runs a real call through the queue and shows the answer or the error.
 
 Each agent uses the office's **default** provider unless you assign it its own when editing it. You can also set its own model (for example, a powerful model for leads and a cheap one for the rest).
 
@@ -38,21 +38,21 @@ They run as a subprocess inside the `worker` container, with the prompt on stand
 
 | Provider | Command | Credentials |
 |---|---|---|
-| Claude Code | `claude -p --output-format text [--model …]` + permissions + `--session-id`/`--resume` | Session started from **Servidores y sesiones** (recommended). Alternatives: a `claude setup-token` token or an Anthropic API key, in the interface field or in `.env`. |
-| Codex | `codex exec [resume <id>] --skip-git-repo-check --json -o <file> -c sandbox_mode=… [-m …] -` | Session started from **Servidores y sesiones** with the device code (recommended). Alternative: an OpenAI API key in the field or in `.env`. |
+| Claude Code | `claude -p --output-format text [--model …]` + permissions + `--session-id`/`--resume` | Session started from **Servers and sessions** (recommended). Alternatives: a `claude setup-token` token or an Anthropic API key, in the interface field or in `.env`. |
+| Codex | `codex exec [resume <id>] --skip-git-repo-check --json -o <file> -c sandbox_mode=… [-m …] -` | Session started from **Servers and sessions** with the device code (recommended). Alternative: an OpenAI API key in the field or in `.env`. |
 | Custom command | `sh -c "<your command>"` | Whatever your command needs; it must be installed in the image. |
 
 They are slower than an API (they start a full agent per call) but let you use a subscription instead of paying per token. With `INSTALL_AGENT_CLIS=false` they are not installed.
 
 ### Logging in
 
-In **Modelos y ajustes → Servidores y sesiones** (or in the provider's own card) each server shows the state of its sessions and a button to start or end them. The session lives in that server's `agent-home` volume: each remote server has its own.
+In **Models and settings → Servers and sessions** (or in the provider's own card) each server shows the state of its sessions and a button to start or end them. The session lives in that server's `agent-home` volume: each remote server has its own.
 
 If device-code login appears disabled for Codex, enable it in the security settings of your ChatGPT account.
 
 ### Where each agent runs
 
-An agent uses the configured provider, but the call leaves from the server assigned to it. For a local model on a remote machine, create a provider pointing to `http://host.docker.internal:11434/v1` (as seen from that server) and assign the agents to that server. «Guardar y probar» lets you choose which server runs the test.
+An agent uses the configured provider, but the call leaves from the server assigned to it. For a local model on a remote machine, create a provider pointing to `http://host.docker.internal:11434/v1` (as seen from that server) and assign the agents to that server. «Save and test» lets you choose which server runs the test.
 
 ## Tools for API models
 
@@ -60,7 +60,7 @@ The `anthropic` and `openai` providers (local models included) get office tools 
 
 ## What each call is for (intents)
 
-Every job carries an intent, shown in the **Actividad** tab:
+Every job carries an intent, shown in the **Activity** tab:
 
 | Intent | When |
 |---|---|
@@ -70,7 +70,7 @@ Every job carries an intent, shown in the **Actividad** tab:
 | `synth` | A lead combining the team's deliveries. |
 | `meeting` | One turn of an agent in a meeting. |
 | `minutes` | The chair writing the meeting minutes or spec. |
-| `test` | «Guardar y probar». |
+| `test` | «Save and test». |
 
 ## Mock brain
 

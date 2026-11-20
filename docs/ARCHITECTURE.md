@@ -34,9 +34,10 @@
 | `sessions.ts` | Work sessions per agent and project, and what each job receives from the agent (`workFor`: folder, permissions, credentials and session). |
 | `tools.ts` | Catalogue of external tools (brain CLIs, GitHub, Cloudflare, Vercel, Netlify) with their install and login commands. |
 | `db.ts` | SQLite schema and access (`node:sqlite`). |
-| `seed.ts` | Initial data (mock provider, two departments, five agents). |
+| `seed.ts` | Initial data (mock provider) and the team templates; the development team is the default. |
 | `companions.ts` | Compi species, levels (100 experience per level) and evolution stages. |
-| `settings.ts` | Boss settings: name, appearance, compi, experience and default provider. |
+| `settings.ts` | Boss settings: name, appearance, compi, experience, default provider and the office language. |
+| `i18n.ts`, `i18n-en.ts` | Translation: `t` for the current language (the office's, or the job's inside the worker), `m` for feed messages, `N`/`tr` for module-level texts and `relabel` to switch texts the office wrote. The English dictionary is keyed by the Spanish text. |
 | `hub.ts` | Socket registry and message broadcast. |
 | `types.ts` | Types shared by server and worker. |
 
@@ -146,7 +147,7 @@ An office's routes are served under `/o/<port>` (for example `GET /o/3101/api/bo
 | `POST /api/party` | Start a celebration (or return the current one). |
 | `POST/PATCH/DELETE /api/teams[/:id]`, `POST /api/teams/:id/tasks` | Departments and department jobs. |
 | `POST/PATCH/DELETE /api/providers[/:id]`, `POST /api/providers/:id/test` | Providers and connection test. |
-| `PATCH /api/settings` | Boss profile, default provider, office name and link address. |
+| `PATCH /api/settings` | Boss profile, default provider, office name, link address and language (`lang`: `es` or `en`, which relabels the texts the office wrote). |
 | `POST/DELETE /api/nodes[/:id]`, `GET /api/nodes/:id/setup`, `POST /api/nodes/:id/refresh` | Remote servers. |
 | `POST /api/offices/invite`, `/join`, `DELETE /api/offices/:id`, `POST /api/offices/:id/tasks` | Links between offices and remote jobs. |
 | `WS /link/node`, `WS /link/office`, `GET /link/health` | Link port: remote servers and other offices (with token). |
@@ -185,6 +186,7 @@ A saved plan without a fun zone gets one once at startup (`addFunRoom`), below t
 | `game/character.ts` | Procedural characters and faces from the appearance, including the dancing pose; portraits. |
 | `game/creature.ts` | The eight compi species and their drawing in three stages. |
 | `game/daylight.ts` | Light from the browser's time: day phase, window sky, night layer and light sources. |
+| `i18n.ts`, `i18n-en.ts` | Interface language: the visitor's choice (browser storage, or the browser language the first time), `t` for the interface texts and `msg` to show feed messages with the backend dictionary. |
 | `store.ts` | Minimal global state (`useSyncExternalStore`) and `world` (interpolated actors, outside React). |
 | `net.ts` | REST and WebSocket against the chosen office (`/o/<port>`), gateway API, office switching and actions (`go`, `selectAgent`, `celebrate`). |
 | `ui/*` | Top bar, team list, agent panel, agent and appearance editor, departments, tasks, settings and providers. `ui/Companions.tsx` holds the first choice, the album, the experience bar and the dialog box. `ui/Servers.tsx` shows the servers and the guided login of any tool; `ui/Tools.tsx`, the connections; `ui/ProjectsModal.tsx`, the archive of projects and sessions; `ui/MeetingsModal.tsx`, the meeting room; `ui/OfficesModal.tsx`, the offices panel; `ui/Architect.tsx`, the architect mode panel. |

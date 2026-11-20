@@ -39,13 +39,13 @@ curl localhost:8080/api/hub/offices
 4. Send a job to a person and to a department. Check in the receiving office that the task carries the origin, and in the sending one that a visitor walks in to deliver it and the dialog box appears.
 5. Restart the server (`docker compose up -d --force-recreate server`): every office must come back and relink by itself within seconds.
 
-To remove it: `curl -X DELETE localhost:8080/api/hub/offices/3102` (or **Oficinas → Eliminar esta oficina**). The other office must lose the link.
+To remove it: `curl -X DELETE localhost:8080/api/hub/offices/3102` (or **Offices → Delete this office**). The other office must lose the link.
 
-A link with another team's office is tested with a second installation (`OFFICE_PORT=8081 LINK_PORT=8091 docker compose -p agent-office-2 up -d`) and an invitation from **Oficinas → Oficinas de fuera**.
+A link with another team's office is tested with a second installation (`OFFICE_PORT=8081 LINK_PORT=8091 docker compose -p agent-office-2 up -d`) and an invitation from **Offices → Outside offices**.
 
 ## CLI login
 
-In **Modelos y ajustes → Servidores y sesiones**, *Iniciar sesión* must show the link (Claude Code) or the link and the code (Codex) within a few seconds. Completing it requires a real account; without one, it is enough to check that the link appears and that closing the window ends the process.
+In **Models and settings → Servers and sessions**, *Sign in* must show the link (Claude Code) or the link and the code (Codex) within a few seconds. Completing it requires a real account; without one, it is enough to check that the link appears and that closing the window ends the process.
 
 From the command line:
 
