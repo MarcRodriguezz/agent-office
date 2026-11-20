@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, copy, openTerm } from '../net';
 import { toast, useStore } from '../store';
 import type { NodeState, ToolAction, ToolDef, ToolStatus } from '../types';
+import { t } from '../i18n';
 
 export const statusOf = (node: NodeState | undefined, id: string): ToolStatus | undefined => node?.info?.tools.find((t) => t.id === id);
 export const useTool = (id: string) => useStore((s) => s.tools.find((t) => t.id === id));
@@ -33,14 +34,14 @@ export function LoginFlow({ node, tool, action, onClose, onDone }: { node: NodeS
       setState(code === 0 ? 'done' : 'error');
       if (code === 0) done.current?.();
     };
-    void openTerm(node.id, tool.id, action, (data) => alive && setOutput((o) => o + data), finish).then((t) => {
+    void openTerm(node.id, tool.id, action, (data) => alive && setOutput((o) => o + data), finish).then((opened) => {
       if (!alive) {
-        t?.kill();
+        opened?.kill();
         return;
       }
-      term.current = t;
-      setState(t ? 'running' : 'error');
-      if (!t) setOutput('No se ha podido abrir la sesión en este servidor.');
+      term.current = opened;
+      setState(opened ? 'running' : 'error');
+      if (!opened) setOutput(t('No se ha podido abrir la sesión en este servidor.'));
     });
     return () => {
       alive = false;
@@ -65,65 +66,65 @@ export function LoginFlow({ node, tool, action, onClose, onDone }: { node: NodeS
     setValue('');
     setSent(true);
   };
-  const paste = () => navigator.clipboard.readText().then((t) => setValue(t.trim()), () => toast('Pega el código con Ctrl+V.', false));
-  const verb = action === 'install' ? 'Instalar' : login ? 'Iniciar sesión en' : 'Cerrar la sesión de';
+  const paste = () => navigator.clipboard.readText().then((t) => setValue(t.trim()), () => toast(t('Pega el código con Ctrl+V.'), false));
+  const verb = action === 'install' ? t('Instalar') : login ? t('Iniciar sesión en') : t('Cerrar la sesión de');
   const title = `${verb} ${tool.name}${node.local ? '' : ` · ${node.name}`}`;
 
   return (
     <div className="login">
       <header>
         <strong>{title}</strong>
-        <button className="icon" onClick={onClose} aria-label="Cerrar">✕</button>
+        <button className="icon" onClick={onClose} aria-label={t('Cerrar')}>✕</button>
       </header>
       {login && (state === 'starting' || state === 'running') && (
         <ol className="steps">
           <li className={url ? 'ready' : 'wait'}>
             <div>
-              <b>Abre la página de inicio de sesión</b>
-              <small>{url ? 'Se abre en una pestaña nueva. Entra con tu cuenta y autoriza el acceso.' : 'Preparando el enlace…'}</small>
+              <b>{t('Abre la página de inicio de sesión')}</b>
+              <small>{url ? t('Se abre en una pestaña nueva. Entra con tu cuenta y autoriza el acceso.') : t('Preparando el enlace…')}</small>
             </div>
             <div className="row">
-              <a className={`button primary ${url ? '' : 'off'}`} href={url} target="_blank" rel="noreferrer">Abrir página</a>
-              <button disabled={!url} onClick={() => url && void copy(url, 'Enlace copiado')}>Copiar enlace</button>
+              <a className={`button primary ${url ? '' : 'off'}`} href={url} target="_blank" rel="noreferrer">{t('Abrir página')}</a>
+              <button disabled={!url} onClick={() => url && void copy(url, t('Enlace copiado'))}>{t('Copiar enlace')}</button>
             </div>
           </li>
           {flow === 'code' ? (
             <li className={url ? 'ready' : 'wait'}>
               <div>
-                <b>Pega aquí el código que te da la página</b>
-                <small>{sent ? 'Código enviado. Comprobando…' : 'Aparece al terminar de autorizar.'}</small>
+                <b>{t('Pega aquí el código que te da la página')}</b>
+                <small>{sent ? t('Código enviado. Comprobando…') : t('Aparece al terminar de autorizar.')}</small>
               </div>
               <div className="row">
-                <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Código de la página" disabled={!url}
+                <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={t('Código de la página')} disabled={!url}
                   onKeyDown={(e) => e.key === 'Enter' && send(value)} />
-                <button disabled={!url} onClick={() => void paste()}>Pegar</button>
-                <button className="primary" disabled={!value.trim()} onClick={() => send(value)}>Enviar</button>
+                <button disabled={!url} onClick={() => void paste()}>{t('Pegar')}</button>
+                <button className="primary" disabled={!value.trim()} onClick={() => send(value)}>{t('Enviar')}</button>
               </div>
             </li>
           ) : (
             <li className={code ? 'ready' : 'wait'}>
               <div>
-                <b>Escribe este código en la página</b>
-                <small>{code ? 'Esta ventana se entera sola cuando termines.' : 'Preparando el código…'}</small>
+                <b>{t('Escribe este código en la página')}</b>
+                <small>{code ? t('Esta ventana se entera sola cuando termines.') : t('Preparando el código…')}</small>
               </div>
               <div className="row">
                 <code className="bigcode">{code ?? '····-·····'}</code>
-                <button className="primary" disabled={!code} onClick={() => code && void copy(code, 'Código copiado')}>Copiar código</button>
+                <button className="primary" disabled={!code} onClick={() => code && void copy(code, t('Código copiado'))}>{t('Copiar código')}</button>
               </div>
             </li>
           )}
         </ol>
       )}
-      {!login && state !== 'done' && state !== 'error' && <p className="hint">{action === 'install' ? 'Instalando… puede tardar un minuto.' : 'Cerrando la sesión…'}</p>}
+      {!login && state !== 'done' && state !== 'error' && <p className="hint">{action === 'install' ? t('Instalando… puede tardar un minuto.') : t('Cerrando la sesión…')}</p>}
       {state === 'done' && (
         <p className="result ok">
-          {action === 'install' ? 'Instalada. Se queda guardada en este servidor.' : login ? 'Sesión iniciada. Se conserva aunque reinicies la oficina.' : 'Sesión cerrada.'}
+          {action === 'install' ? t('Instalada. Se queda guardada en este servidor.') : login ? t('Sesión iniciada. Se conserva aunque reinicies la oficina.') : t('Sesión cerrada.')}
         </p>
       )}
-      {state === 'error' && <p className="result bad">No ha salido bien. Abre el detalle para ver qué ha dicho el programa y vuelve a intentarlo.</p>}
+      {state === 'error' && <p className="result bad">{t('No ha salido bien. Abre el detalle para ver qué ha dicho el programa y vuelve a intentarlo.')}</p>}
       <details open={state === 'error'}>
-        <summary>Ver lo que dice el programa</summary>
-        <pre>{text || 'Conectando…'}</pre>
+        <summary>{t('Ver lo que dice el programa')}</summary>
+        <pre>{text || t('Conectando…')}</pre>
       </details>
     </div>
   );
@@ -131,14 +132,14 @@ export function LoginFlow({ node, tool, action, onClose, onDone }: { node: NodeS
 
 export function ToolRow({ node, tool, onAction }: { node: NodeState; tool: ToolDef; onAction: (action: ToolAction) => void }) {
   const status = statusOf(node, tool.id);
-  if (!node.online || !status) return <div className="clirow"><b>{tool.name}</b><small>Sin datos: el servidor no está conectado.</small></div>;
+  if (!node.online || !status) return <div className="clirow"><b>{tool.name}</b><small>{t('Sin datos: el servidor no está conectado.')}</small></div>;
   if (!status.installed) {
     return (
       <div className="clirow">
         <b>{tool.name}</b>
-        <span className="pill muted">No instalada</span>
-        <small>{tool.npm ? 'Se instala en este servidor y se conserva.' : 'No viene en la imagen de este servidor.'}</small>
-        {tool.npm && <button className="primary" onClick={() => onAction('install')}>Instalar</button>}
+        <span className="pill muted">{t('No instalada')}</span>
+        <small>{tool.npm ? t('Se instala en este servidor y se conserva.') : t('No viene en la imagen de este servidor.')}</small>
+        {tool.npm && <button className="primary" onClick={() => onAction('install')}>{t('Instalar')}</button>}
       </div>
     );
   }
@@ -146,12 +147,12 @@ export function ToolRow({ node, tool, onAction }: { node: NodeState; tool: ToolD
     <div className="clirow">
       <b>{tool.name} <small>{status.version}</small></b>
       {tool.login
-        ? <span className={`pill ${status.loggedIn ? 'green' : 'muted'}`}>{status.loggedIn ? 'Sesión iniciada' : 'Sin sesión'}</span>
-        : <span className="pill blue">Instalada</span>}
-      <small>{status.detail || (tool.login ? '' : 'Usa el token de cada conexión.')}</small>
+        ? <span className={`pill ${status.loggedIn ? 'green' : 'muted'}`}>{status.loggedIn ? t('Sesión iniciada') : t('Sin sesión')}</span>
+        : <span className="pill blue">{t('Instalada')}</span>}
+      <small>{status.detail || (tool.login ? '' : t('Usa el token de cada conexión.'))}</small>
       {tool.login && (status.loggedIn
-        ? <button onClick={() => onAction('logout')}>Cerrar sesión</button>
-        : <button className="primary" onClick={() => onAction('login')}>Iniciar sesión</button>)}
+        ? <button onClick={() => onAction('logout')}>{t('Cerrar sesión')}</button>
+        : <button className="primary" onClick={() => onAction('login')}>{t('Iniciar sesión')}</button>)}
     </div>
   );
 }
@@ -163,7 +164,7 @@ export function Session({ toolId }: { toolId: string }) {
   if (!tool) return null;
   return (
     <div className="sessions">
-      <h4>Sesión de {tool.name}</h4>
+      <h4>{t('Sesión de {name}', { name: tool.name })}</h4>
       {nodes.map((n) => (
         <div key={n.id} className="sessionrow">
           <em>{n.name}</em>
@@ -184,10 +185,10 @@ function Setup({ id }: { id: string }) {
   const command = `OFFICE_URL=${setup.officeUrl} NODE_TOKEN=${setup.token} docker compose -f docker-compose.node.yml up -d --build`;
   return (
     <div className="setup">
-      <p className="hint">En la otra máquina, con este repositorio clonado y Docker instalado, ejecuta este comando. El servidor aparecerá conectado aquí en unos segundos.</p>
+      <p className="hint">{t('En la otra máquina, con este repositorio clonado y Docker instalado, ejecuta este comando. El servidor aparecerá conectado aquí en unos segundos.')}</p>
       <div className="copybox">
         <code>{command}</code>
-        <button className="primary" onClick={() => void copy(command, 'Comando copiado')}>Copiar comando</button>
+        <button className="primary" onClick={() => void copy(command, t('Comando copiado'))}>{t('Copiar comando')}</button>
       </div>
     </div>
   );
@@ -208,16 +209,14 @@ export function Servers() {
     setName('');
   };
   const remove = async (node: NodeState) => {
-    if (!confirm(`¿Quitar el servidor «${node.name}»? Sus agentes volverán a ejecutarse en esta oficina.`)) return;
+    if (!confirm(t('¿Quitar el servidor «{name}»? Sus agentes volverán a ejecutarse en esta oficina.', { name: node.name }))) return;
     await api('DELETE', `/nodes/${node.id}`).catch((e) => toast(e.message, false));
   };
 
   return (
     <div className="servers">
       <p className="hint">
-        Los agentes piensan y trabajan en este equipo o en otros servidores tuyos: una máquina con GPU, un VPS con tu sesión de Claude Code.
-        Cada servidor guarda sus propias sesiones, herramientas y carpetas de proyecto. Al editar un agente eliges dónde se ejecuta.
-      </p>
+        {t('Los agentes piensan y trabajan en este equipo o en otros servidores tuyos: una máquina con GPU, un VPS con tu sesión de Claude Code. Cada servidor guarda sus propias sesiones, herramientas y carpetas de proyecto. Al editar un agente eliges dónde se ejecuta.')}</p>
       {nodes.map((n) => {
         const here = agents.filter((a) => (a.nodeId ?? 'local') === n.id);
         return (
@@ -225,13 +224,13 @@ export function Servers() {
             <header>
               <i className={n.online ? 'on' : ''} />
               <strong>{n.name}</strong>
-              <small>{n.online ? `${n.info?.host ?? ''} · hasta ${n.info?.concurrency ?? '?'} trabajos a la vez${n.active ? ` · ${n.active} en curso` : ''}` : 'desconectado'}</small>
+              <small>{n.online ? t('{v0} · hasta {v1} trabajos a la vez{v2}', { v0: n.info?.host ?? '', v1: n.info?.concurrency ?? '?', v2: n.active ? t(' · {active} en curso', { active: n.active }) : '' }) : 'desconectado'}</small>
               <span />
-              <button onClick={() => void api('POST', `/nodes/${n.id}/refresh`)}>Comprobar de nuevo</button>
-              {!n.local && <button className="danger" onClick={() => void remove(n)}>Quitar</button>}
+              <button onClick={() => void api('POST', `/nodes/${n.id}/refresh`)}>{t('Comprobar de nuevo')}</button>
+              {!n.local && <button className="danger" onClick={() => void remove(n)}>{t('Quitar')}</button>}
             </header>
             {tools.map((t) => <ToolRow key={t.id} node={n} tool={t} onAction={(action) => setOpen({ node: n, tool: t, action })} />)}
-            <small className="who">{here.length ? `Trabajan aquí: ${here.map((a) => a.name).join(', ')}` : 'Ningún agente asignado.'}</small>
+            <small className="who">{here.length ? t('Trabajan aquí: {v0}', { v0: here.map((a) => a.name).join(', ') }) : t('Ningún agente asignado.')}</small>
             {!n.local && !n.online && <Setup id={n.id} />}
             {open?.node.id === n.id && (
               <LoginFlow key={`${open.tool.id}-${open.action}`} node={n} tool={open.tool} action={open.action}
@@ -241,16 +240,14 @@ export function Servers() {
         );
       })}
       <div className="addserver">
-        <label>Añadir un servidor remoto
-          <div className="row">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre: GPU de casa, VPS…" onKeyDown={(e) => e.key === 'Enter' && void add()} />
-            <button className="primary" disabled={!name.trim()} onClick={() => void add()}>Añadir</button>
+        <label>{t('Añadir un servidor remoto')}<div className="row">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Nombre: GPU de casa, VPS…')} onKeyDown={(e) => e.key === 'Enter' && void add()} />
+            <button className="primary" disabled={!name.trim()} onClick={() => void add()}>{t('Añadir')}</button>
           </div>
         </label>
-        <label>Dirección por la que los servidores llegan hasta este equipo
-          <div className="row">
+        <label>{t('Dirección por la que los servidores llegan hasta este equipo')}<div className="row">
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://mi-equipo:8090" />
-            <button disabled={url === linkBase} onClick={() => void api('PATCH', '/settings', { linkUrl: url }).then(() => toast('Dirección guardada')).catch((e) => toast(e.message, false))}>Guardar</button>
+            <button disabled={url === linkBase} onClick={() => void api('PATCH', '/settings', { linkUrl: url }).then(() => toast(t('Dirección guardada'))).catch((e) => toast(e.message, false))}>{t('Guardar')}</button>
           </div>
         </label>
       </div>

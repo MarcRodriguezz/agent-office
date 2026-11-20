@@ -14,6 +14,7 @@ import { PeopleModal } from './ui/PeopleModal';
 import { ProjectsModal } from './ui/ProjectsModal';
 import { SettingsModal } from './ui/SettingsModal';
 import { TasksModal } from './ui/TasksModal';
+import { t } from './i18n';
 
 export function App() {
   const ready = useStore((s) => s.ready);
@@ -40,8 +41,8 @@ export function App() {
     return (
       <div className="loading">
         <span className="mark" />
-        <p>Abriendo la oficina…</p>
-        {error && <small>Esperando al servidor ({error})</small>}
+        <p>{t('Abriendo la oficina…')}</p>
+        {error && <small>{t('Esperando al servidor ({error})', { error })}</small>}
       </div>
     );
   }
@@ -52,11 +53,11 @@ export function App() {
       <TopBar />
       <Roster />
       <Feed />
-      {!architect && <div className="help"><kbd>WASD</kbd> o clic para moverte · <kbd>E</kbd> o clic en alguien para hablar · rueda para acercar</div>}
+      {!architect && <div className="help"><kbd>WASD</kbd> {t('o clic para moverte ·')} <kbd>E</kbd> {t('o clic en alguien para hablar · rueda para acercar')}</div>}
       {DEMO && !modal && (
         <div className="demobar">
           <b>Demo</b>
-          <span>Corre entera en tu navegador con respuestas simuladas y se reinicia al recargar. <a href="https://github.com/MarcRodriguezz/agent-office" target="_blank" rel="noreferrer">Ver el código en GitHub</a>.</span>
+          <span>{t('Corre entera en tu navegador con respuestas simuladas y se reinicia al recargar.')} <a href="https://github.com/MarcRodriguezz/agent-office" target="_blank" rel="noreferrer">{t('Ver el código en GitHub')}</a>.</span>
         </div>
       )}
       <DialogBox />

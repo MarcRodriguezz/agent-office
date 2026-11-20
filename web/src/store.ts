@@ -3,6 +3,7 @@ import type {
   ActorSnap, Agent, Appearance, ChatMessage, Companion, Connection, FeedEvent, HubOffice, JobsState, MapData, Meeting, NodeState, OfficesState, Project, Provider,
   Settings, StaffTemplate, Task, Team, ToolDef, Visitor, WorkSession,
 } from './types';
+import { t } from './i18n';
 
 export type Modal =
   | { kind: 'settings'; tab?: 'providers' | 'tools' | 'nodes' | 'profile' | 'jobs' }
@@ -84,7 +85,7 @@ let state: State = {
   agents: [],
   teams: [],
   providers: [],
-  settings: { playerName: 'Jefe', playerAppearance: null, playerCompanion: null, playerXp: 0, defaultProviderId: null, officeName: 'Mi oficina', managerId: null },
+  settings: { playerName: t('Jefe'), playerAppearance: null, playerCompanion: null, playerXp: 0, defaultProviderId: null, officeName: t('Mi oficina'), managerId: null },
   tasks: [],
   feed: [],
   jobs: { jobs: [], totals: { completed: 0, failed: 0 }, waiting: 0, active: 0 },

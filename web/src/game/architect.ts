@@ -2,6 +2,7 @@ import { saveLayout } from '../net';
 import { getState, setState } from '../store';
 import type { Layout, MapData, RoomDef, RoomKind } from '../types';
 import { T } from './draw';
+import { t } from '../i18n';
 
 type Rect = { x: number; y: number; w: number; h: number };
 type Cell = [number, number];
@@ -250,7 +251,7 @@ export function createArchitect(canvas: HTMLCanvasElement, toWorld: (sx: number,
       ctx.strokeRect(room.x * T, room.y * T, room.w * T, room.h * T);
       ctx.globalAlpha = 1;
       const desks = map.desks.filter((d) => d.roomId === room.id).length;
-      const label = `${room.name} · ${room.w}×${room.h}${desks ? ` · ${desks} ${desks === 1 ? 'mesa' : 'mesas'}` : ''}`;
+      const label = `${room.name} · ${room.w}×${room.h}${desks ? ` · ${desks} ${desks === 1 ? t('mesa') : t('mesas')}` : ''}`;
       ctx.font = `600 ${13 / Math.min(1, z)}px ${font}`;
       const w = ctx.measureText(label).width + 16 / Math.min(1, z);
       const h = 24 / Math.min(1, z);

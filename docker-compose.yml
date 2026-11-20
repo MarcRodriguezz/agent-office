@@ -47,7 +47,9 @@ services:
       - agent-home:/home/node
 
   web:
-    build: ./web
+    build:
+      context: .
+      dockerfile: web/Dockerfile
     restart: unless-stopped
     depends_on:
       - server

@@ -1,4 +1,5 @@
 import type { Companion, Facing } from '../types';
+import { t } from '../i18n';
 
 export interface Species {
   id: string;
@@ -11,14 +12,14 @@ export interface Species {
 }
 
 export const SPECIES: Species[] = [
-  { id: 'brotin', name: 'Brotín', type: 'Planta', color: '#6fcf73', dark: '#3f9b5f', light: '#b7efc5', blurb: 'Crece un poco con cada tarea terminada.' },
-  { id: 'ascuo', name: 'Ascuo', type: 'Fuego', color: '#ff8a3d', dark: '#e25b2a', light: '#ffd27a', blurb: 'Se aviva cuando hay prisa por entregar.' },
-  { id: 'gotelo', name: 'Gotelo', type: 'Agua', color: '#4fb3ff', dark: '#2f86d6', light: '#c9e9fb', blurb: 'Mantiene la calma en las reuniones largas.' },
-  { id: 'voltin', name: 'Voltín', type: 'Chispa', color: '#b58cff', dark: '#7c5cff', light: '#ffe66d', blurb: 'Da un chispazo cada vez que surge una idea.' },
-  { id: 'pedrin', name: 'Pedrín', type: 'Roca', color: '#a9a093', dark: '#7d7468', light: '#7fe3e0', blurb: 'Lento pero incansable. No se le cae nada.' },
-  { id: 'nubi', name: 'Nubi', type: 'Aire', color: '#f4f7ff', dark: '#c3cbe0', light: '#ffffff', blurb: 'Flota sobre los papeles sin desordenarlos.' },
-  { id: 'bitxo', name: 'Bitxo', type: 'Dato', color: '#1f8f8a', dark: '#156662', light: '#7df9c8', blurb: 'Vive en la sala de servidores y come logs.' },
-  { id: 'lumo', name: 'Lumo', type: 'Luz', color: '#ff8fc7', dark: '#e0668a', light: '#fff3b0', blurb: 'Brilla más cuanto mejor va el equipo.' },
+  { id: 'brotin', name: 'Brotín', type: t('Planta'), color: '#6fcf73', dark: '#3f9b5f', light: '#b7efc5', blurb: t('Crece un poco con cada tarea terminada.') },
+  { id: 'ascuo', name: 'Ascuo', type: t('Fuego'), color: '#ff8a3d', dark: '#e25b2a', light: '#ffd27a', blurb: t('Se aviva cuando hay prisa por entregar.') },
+  { id: 'gotelo', name: 'Gotelo', type: t('Agua'), color: '#4fb3ff', dark: '#2f86d6', light: '#c9e9fb', blurb: t('Mantiene la calma en las reuniones largas.') },
+  { id: 'voltin', name: 'Voltín', type: t('Chispa'), color: '#b58cff', dark: '#7c5cff', light: '#ffe66d', blurb: t('Da un chispazo cada vez que surge una idea.') },
+  { id: 'pedrin', name: 'Pedrín', type: t('Roca'), color: '#a9a093', dark: '#7d7468', light: '#7fe3e0', blurb: t('Lento pero incansable. No se le cae nada.') },
+  { id: 'nubi', name: 'Nubi', type: t('Aire'), color: '#f4f7ff', dark: '#c3cbe0', light: '#ffffff', blurb: t('Flota sobre los papeles sin desordenarlos.') },
+  { id: 'bitxo', name: 'Bitxo', type: t('Dato'), color: '#1f8f8a', dark: '#156662', light: '#7df9c8', blurb: t('Vive en la sala de servidores y come logs.') },
+  { id: 'lumo', name: 'Lumo', type: t('Luz'), color: '#ff8fc7', dark: '#e0668a', light: '#fff3b0', blurb: t('Brilla más cuanto mejor va el equipo.') },
 ];
 
 export const speciesOf = (id: string) => SPECIES.find((s) => s.id === id) ?? SPECIES[0];
@@ -26,7 +27,7 @@ export const XP_PER_LEVEL = 100;
 export const levelOf = (xp: number) => 1 + Math.floor(Math.max(0, xp) / XP_PER_LEVEL);
 export const stageOf = (level: number) => (level >= 6 ? 3 : level >= 3 ? 2 : 1);
 export const nextEvolution = (level: number) => (level < 3 ? 3 : level < 6 ? 6 : null);
-export const STAGE_LABEL = ['', 'Cría', 'Joven', 'Adulto'];
+export const STAGE_LABEL = ['', t('Cría'), t('Joven'), t('Adulto')];
 
 export const randomCompanion = (): Companion => {
   const s = SPECIES[Math.floor(Math.random() * SPECIES.length)];

@@ -1,0 +1,7 @@
+.git
+**/node_modules
+**/dist
+**/dist-demo
+**/build-test
+**/data
+.env
