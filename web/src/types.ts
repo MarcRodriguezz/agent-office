@@ -1,3 +1,4 @@
+import type { Lang, Msg } from '../../backend/src/i18n.js';
 export type ProviderKind = 'mock' | 'anthropic' | 'openai' | 'claude-code' | 'codex' | 'cli';
 export type Facing = 'down' | 'up' | 'left' | 'right';
 export type Status = 'idle' | 'walking' | 'working' | 'thinking' | 'talking' | 'visiting' | 'waiting' | 'break' | 'dancing';
@@ -129,6 +130,7 @@ export interface Task {
 export interface FeedEvent {
   id: string;
   text: string;
+  msg?: Msg;
   createdAt: number;
 }
 
@@ -159,6 +161,7 @@ export interface Settings {
   defaultProviderId: string | null;
   officeName: string;
   managerId: string | null;
+  lang?: Lang;
 }
 
 export interface StaffTemplate {

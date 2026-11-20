@@ -3,16 +3,17 @@ import { addRoom, canUndo, patchRoom, removeRoom, resizePlant, undo } from '../g
 import { api, saveLayout } from '../net';
 import { setState, toast, useStore } from '../store';
 import type { Room, RoomKind, Team } from '../types';
+import { t } from '../i18n';
 
 const ADDABLE: RoomKind[] = ['work', 'office', 'meeting', 'cafe', 'lounge', 'fun', 'server'];
 const NOTE: Record<RoomKind, string> = {
-  work: 'Mesas para un departamento. Cuanto más grande, más mesas.',
-  office: 'Una mesa aparte, para una persona concreta o libre.',
-  meeting: 'Mesa de reuniones y tablón de tareas.',
-  cafe: 'Barra de café y mesas para los descansos.',
-  lounge: 'Sofás para que la gente se despeje.',
-  fun: 'Pista de baile, tocadiscos y recreativas: aquí se celebra.',
-  server: 'Consola para configurar los proveedores LLM.',
+  work: t('Mesas para un departamento. Cuanto más grande, más mesas.'),
+  office: t('Una mesa aparte, para una persona concreta o libre.'),
+  meeting: t('Mesa de reuniones y tablón de tareas.'),
+  cafe: t('Barra de café y mesas para los descansos.'),
+  lounge: t('Sofás para que la gente se despeje.'),
+  fun: t('Pista de baile, tocadiscos y recreativas: aquí se celebra.'),
+  server: t('Consola para configurar los proveedores LLM.'),
   boss: '',
   hr: '',
 };
@@ -36,36 +37,32 @@ function RoomForm({ room }: { room: Room }) {
   return (
     <section className="archroom">
       <h4>{info.label}</h4>
-      <label>Nombre en el plano
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={28}
+      <label>{t('Nombre en el plano')}<input value={name} onChange={(e) => setName(e.target.value)} maxLength={28}
           onBlur={() => name.trim() && name.trim().toUpperCase() !== room.name && void patchRoom(room.id, { name })}
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
       </label>
       {(room.kind === 'work' || room.kind === 'office') && (
-        <label>Departamento
-          <select value={room.teamId ?? ''} onChange={(e) => setTeam(e.target.value || null)}>
-            <option value="">Sin asignar: mesas para cualquiera</option>
+        <label>{t('Departamento')}<select value={room.teamId ?? ''} onChange={(e) => setTeam(e.target.value || null)}>
+            <option value="">{t('Sin asignar: mesas para cualquiera')}</option>
             {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </label>
       )}
       {room.kind === 'office' && (
-        <label>Persona
-          <select value={room.agentId ?? ''} onChange={(e) => void patchRoom(room.id, { agentId: e.target.value || null })}>
-            <option value="">Sin dueño</option>
+        <label>{t('Persona')}<select value={room.agentId ?? ''} onChange={(e) => void patchRoom(room.id, { agentId: e.target.value || null })}>
+            <option value="">{t('Sin dueño')}</option>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.role}</option>)}
           </select>
         </label>
       )}
       <dl>
-        <dt>Tamaño</dt><dd>{room.w} × {room.h} casillas (mínimo {info.min[0]} × {info.min[1]})</dd>
-        {desks > 0 && <><dt>Mesas</dt><dd>{desks}{here.length ? ` · ${here.map((a) => a.name).join(', ')}` : ' · vacías'}</dd></>}
+        <dt>{t('Tamaño')}</dt><dd>{t('{w} × {h} casillas (mínimo {v2} × {v3})', { w: room.w, h: room.h, v2: info.min[0], v3: info.min[1] })}</dd>
+        {desks > 0 && <><dt>{t('Mesas')}</dt><dd>{desks}{here.length ? ` · ${here.map((a) => a.name).join(', ')}` : t(' · vacías')}</dd></>}
       </dl>
       <button className="danger" disabled={last || info.unique}
-        title={info.unique || last ? 'La oficina necesita esta sala: puedes moverla o cambiarle el tamaño' : ''}
-        onClick={() => confirm(`¿Quitar «${room.name}» del plano?`) && void removeRoom(room.id)}>
-        Quitar esta sala
-      </button>
+        title={info.unique || last ? t('La oficina necesita esta sala: puedes moverla o cambiarle el tamaño') : ''}
+        onClick={() => confirm(t('¿Quitar «{name}» del plano?', { name: room.name })) && void removeRoom(room.id)}>
+        {t('Quitar esta sala')}</button>
     </section>
   );
 }
@@ -89,17 +86,16 @@ function NewDepartment({ onDone }: { onDone: () => void }) {
   };
   return (
     <div className="archnew">
-      <label>¿Para qué departamento?
-        <select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+      <label>{t('¿Para qué departamento?')}<select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
           {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          <option value="new">Un departamento nuevo…</option>
-          <option value="">Ninguno: mesas libres</option>
+          <option value="new">{t('Un departamento nuevo…')}</option>
+          <option value="">{t('Ninguno: mesas libres')}</option>
         </select>
       </label>
-      {teamId === 'new' && <label>Nombre del departamento<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Diseño, Legal, Datos…" autoFocus /></label>}
+      {teamId === 'new' && <label>{t('Nombre del departamento')}<input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Diseño, Legal, Datos…')} autoFocus /></label>}
       <div className="row">
-        <button onClick={onDone}>Cancelar</button>
-        <button className="primary" disabled={busy || (teamId === 'new' && !name.trim())} onClick={() => void create()}>Añadir al plano</button>
+        <button onClick={onDone}>{t('Cancelar')}</button>
+        <button className="primary" disabled={busy || (teamId === 'new' && !name.trim())} onClick={() => void create()}>{t('Añadir al plano')}</button>
       </div>
     </div>
   );
@@ -118,23 +114,23 @@ export function Architect() {
     <aside className="panel arch">
       <header>
         <div className="who">
-          <strong>Modo arquitecto</strong>
-          <small>{map.rooms.length} salas · {map.desks.length} mesas para {people} personas</small>
+          <strong>{t('Modo arquitecto')}</strong>
+          <small>{t('{v0} salas · {v1} mesas para {people} personas', { v0: map.rooms.length, v1: map.desks.length, people })}</small>
         </div>
-        <button className="primary" onClick={() => setState({ architect: false, roomId: null })}>Terminar</button>
+        <button className="primary" onClick={() => setState({ architect: false, roomId: null })}>{t('Terminar')}</button>
       </header>
       <div className="archbody">
         <ul className="archhelp">
-          <li><b>Arrastra</b> una sala para moverla.</li>
-          <li><b>Tira de una esquina</b> de la sala elegida para cambiarle el tamaño.</li>
-          <li><b>Pulsa un muro</b> entre dos salas para abrir o cerrar una puerta.</li>
-          <li><b>Arrastra el fondo</b> para desplazarte y usa la rueda para alejarte.</li>
+          <li><b>{t('Arrastra')}</b> {t('una sala para moverla.')}</li>
+          <li><b>{t('Tira de una esquina')}</b> {t('de la sala elegida para cambiarle el tamaño.')}</li>
+          <li><b>{t('Pulsa un muro')}</b> {t('entre dos salas para abrir o cerrar una puerta.')}</li>
+          <li><b>{t('Arrastra el fondo')}</b> {t('para desplazarte y usa la rueda para alejarte.')}</li>
         </ul>
 
-        {room ? <RoomForm key={room.id} room={room} /> : <p className="hint">Pulsa una sala del plano para editarla.</p>}
+        {room ? <RoomForm key={room.id} room={room} /> : <p className="hint">{t('Pulsa una sala del plano para editarla.')}</p>}
 
         <section>
-          <h4>Añadir al plano</h4>
+          <h4>{t('Añadir al plano')}</h4>
           {department ? <NewDepartment onDone={() => setDepartment(false)} /> : (
             <div className="archkinds">
               {ADDABLE.map((kind) => (
@@ -148,23 +144,22 @@ export function Architect() {
         </section>
 
         <section>
-          <h4>Planta · {map.w} × {map.h} casillas</h4>
+          <h4>{t('Planta · {w} × {h} casillas', { w: map.w, h: map.h })}</h4>
           <div className="archgrid">
-            <span>Ancho</span>
-            <button disabled={map.w - step < map.limits.minW} onClick={() => void resizePlant(-step, 0)}>Reducir</button>
-            <button disabled={map.w + step > map.limits.maxW} onClick={() => void resizePlant(step, 0)}>Ampliar</button>
-            <span>Fondo</span>
-            <button disabled={map.h - step < map.limits.minH} onClick={() => void resizePlant(0, -step)}>Reducir</button>
-            <button disabled={map.h + step > map.limits.maxH} onClick={() => void resizePlant(0, step)}>Ampliar</button>
+            <span>{t('Ancho')}</span>
+            <button disabled={map.w - step < map.limits.minW} onClick={() => void resizePlant(-step, 0)}>{t('Reducir')}</button>
+            <button disabled={map.w + step > map.limits.maxW} onClick={() => void resizePlant(step, 0)}>{t('Ampliar')}</button>
+            <span>{t('Fondo')}</span>
+            <button disabled={map.h - step < map.limits.minH} onClick={() => void resizePlant(0, -step)}>{t('Reducir')}</button>
+            <button disabled={map.h + step > map.limits.maxH} onClick={() => void resizePlant(0, step)}>{t('Ampliar')}</button>
           </div>
         </section>
 
         <footer>
-          <button disabled={!canUndo()} onClick={() => void undo()}>Deshacer</button>
+          <button disabled={!canUndo()} onClick={() => void undo()}>{t('Deshacer')}</button>
           <span />
-          <button className="danger" onClick={() => confirm('¿Volver a la distribución de serie? Se pierden las salas que hayas añadido.') && void saveLayout({ reset: true })}>
-            Plano de serie
-          </button>
+          <button className="danger" onClick={() => confirm(t('¿Volver a la distribución de serie? Se pierden las salas que hayas añadido.')) && void saveLayout({ reset: true })}>
+            {t('Plano de serie')}</button>
         </footer>
       </div>
     </aside>

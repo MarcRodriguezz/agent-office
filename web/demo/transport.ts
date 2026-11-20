@@ -4,8 +4,10 @@ import { clientMessage, registerRoutes } from '../../backend/src/routes.js';
 import { seed } from '../../backend/src/seed.js';
 import { snapshot, startSim } from '../../backend/src/sim.js';
 import { store } from './db';
+import { LANG } from '../src/i18n';
 import { hub, type Sock } from './hub';
 import { officeSummary } from './offices';
+import { N, t, tr } from '../../backend/src/i18n.js';
 
 export const DEMO = true;
 
@@ -29,7 +31,7 @@ interface Route {
 }
 
 const OFFICE = '3101';
-const ONLY_DOCKER = 'Esto necesita la instalación con Docker: la demo corre entera en tu navegador.';
+const ONLY_DOCKER = N('Esto necesita la instalación con Docker: la demo corre entera en tu navegador.');
 const routes: Route[] = [];
 const copy = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 
@@ -46,8 +48,9 @@ let started = false;
 function start() {
   if (started) return;
   started = true;
+  store.setSetting('lang', LANG);
   seed();
-  store.setSetting('officeName', 'Oficina de demostración');
+  store.setSetting('officeName', t('Oficina de demostración'));
   loadLayout(null);
   initOffice();
   startSim();
@@ -55,7 +58,7 @@ function start() {
 }
 
 async function hubRequest(method: string) {
-  if (method !== 'GET') throw new Error(ONLY_DOCKER);
+  if (method !== 'GET') throw new Error(tr(ONLY_DOCKER));
   const s = officeSummary();
   return [{
     id: OFFICE, name: s.name, online: true, people: s.people, teams: s.teams, working: s.working,

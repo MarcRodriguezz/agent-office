@@ -1,6 +1,7 @@
 import type { Furniture, MapData } from '../types';
 import type { Daylight } from './daylight';
 import { roundRect } from './character';
+import { t } from '../i18n';
 
 export const T = 48;
 export const WALL_H = 30;
@@ -299,7 +300,7 @@ export function drawFurniture(ctx: Ctx, f: Furniture, info: FurnitureInfo) {
       ctx.strokeRect(px + 5, py - 11, pw - 10, 44);
       ctx.font = '700 9px "Segoe UI", system-ui, sans-serif';
       ctx.fillStyle = '#4f8cff';
-      ctx.fillText('TAREAS', px + 12, py + 1);
+      ctx.fillText(t('TAREAS'), px + 12, py + 1);
       ['#ffd76a', '#ff9fb5', '#9ad7ff', '#b7efc5', '#ffd76a', '#9ad7ff'].forEach((color, i) => {
         ctx.fillStyle = color;
         ctx.fillRect(px + 14 + (i % 3) * 22 + (i > 2 ? 78 : 0), py + 7 + Math.floor(i / 3) * 0 + (i % 2) * 11, 16, 9);
@@ -343,7 +344,7 @@ export function drawFurniture(ctx: Ctx, f: Furniture, info: FurnitureInfo) {
       ctx.font = '800 12px "Segoe UI", system-ui, sans-serif';
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
-      ctx.fillText('RRHH', cx, py + ph - 12);
+      ctx.fillText(t('RRHH'), cx, py + ph - 12);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#d5d0c6';

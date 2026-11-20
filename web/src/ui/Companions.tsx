@@ -6,6 +6,7 @@ import { api, selectAgent } from '../net';
 import { setState, toast, useStore } from '../store';
 import type { Companion } from '../types';
 import { Avatar, Modal } from './common';
+import { t } from '../i18n';
 
 export function CreatureView({ species, stage = 1, size = 64, hidden = false }: { species: string; stage?: number; size?: number; hidden?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -41,8 +42,8 @@ export function XpBar({ xp, color }: { xp: number; color?: string }) {
   const level = levelOf(xp);
   const next = nextEvolution(level);
   return (
-    <div className="xp" title={next ? `Evoluciona en el nivel ${next}` : 'Forma final'}>
-      <b>Nv {level}</b>
+    <div className="xp" title={next ? t('Evoluciona en el nivel {next}', { next }) : t('Forma final')}>
+      <b>{t('Nv {level}', { level })}</b>
       <div><i style={{ width: `${((xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100}%`, background: color }} /></div>
       <small>{xp % XP_PER_LEVEL}/{XP_PER_LEVEL}</small>
     </div>
@@ -60,7 +61,7 @@ export function CompanionPicker({ value, onChange }: { value: Companion; onChang
           </button>
         ))}
       </div>
-      <input value={value.name} maxLength={20} placeholder="Mote del compi" onChange={(e) => onChange({ ...value, name: e.target.value })} />
+      <input value={value.name} maxLength={20} placeholder={t('Mote del compi')} onChange={(e) => onChange({ ...value, name: e.target.value })} />
     </div>
   );
 }
@@ -77,8 +78,8 @@ export function StarterModal() {
     <div className="backdrop">
       <div className="modal starter">
         <div className="modal-body">
-          <h2>¡Bienvenido a tu oficina!</h2>
-          <p className="hint">Aquí nadie trabaja solo: cada persona tiene un <strong>compi</strong> que le acompaña, gana experiencia con el trabajo bien hecho y evoluciona. Elige el tuyo.</p>
+          <h2>{t('¡Bienvenido a tu oficina!')}</h2>
+          <p className="hint">{t('Aquí nadie trabaja solo: cada persona tiene un')} <strong>{t('compi')}</strong> {t('que le acompaña, gana experiencia con el trabajo bien hecho y evoluciona. Elige el tuyo.')}</p>
           <div className="startergrid">
             {SPECIES.map((s) => (
               <button key={s.id} className={choice === s.id ? 'on' : ''} onClick={() => setChoice(s.id)}>
@@ -90,9 +91,9 @@ export function StarterModal() {
           </div>
           <p className="blurb">«{species.blurb}»</p>
           <footer>
-            <input value={name} maxLength={20} placeholder={`Ponle un mote (${species.name})`} onChange={(e) => setName(e.target.value)}
+            <input value={name} maxLength={20} placeholder={t('Ponle un mote ({name})', { name: species.name })} onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void confirm()} />
-            <button className="primary" onClick={() => void confirm()}>¡Te elijo, {name.trim() || species.name}!</button>
+            <button className="primary" onClick={() => void confirm()}>{t('¡Te elijo, {v0}!', { v0: name.trim() || species.name })}</button>
           </footer>
         </div>
       </div>
@@ -106,7 +107,7 @@ export function AlbumModal() {
   const tasks = useStore((s) => s.tasks);
   const owners = [
     ...(settings.playerCompanion ? [{
-      id: 'player', name: `${settings.playerName} (tú)`, appearance: settings.playerAppearance, companion: settings.playerCompanion, xp: settings.playerXp, done: 0,
+      id: 'player', name: t('{playerName} (tú)', { playerName: settings.playerName }), appearance: settings.playerAppearance, companion: settings.playerCompanion, xp: settings.playerXp, done: 0,
     }] : []),
     ...agents.map((a) => ({
       id: a.id, name: a.name, appearance: a.appearance, companion: a.companion, xp: a.xp,
@@ -117,9 +118,9 @@ export function AlbumModal() {
   const seen = SPECIES.reduce((n, s) => n + reached(s.id), 0);
 
   return (
-    <Modal title="Álbum de compis" onClose={() => setState({ modal: null })} wide>
+    <Modal title={t('Álbum de compis')} onClose={() => setState({ modal: null })} wide>
       <div className="album">
-        <h4>Clasificación de la oficina</h4>
+        <h4>{t('Clasificación de la oficina')}</h4>
         <div className="ranking">
           {owners.map((o, i) => {
             const s = speciesOf(o.companion.species);
@@ -130,16 +131,16 @@ export function AlbumModal() {
                 <CreatureView species={s.id} stage={stageOf(level)} size={48} />
                 {o.appearance && <Avatar appearance={o.appearance} size={30} />}
                 <span>
-                  <strong>{o.companion.name} <small>de {o.name}</small></strong>
+                  <strong>{o.companion.name} <small>{t('de {name}', { name: o.name })}</small></strong>
                   <XpBar xp={o.xp} color={s.color} />
                 </span>
-                <small className="meta">{s.type} · {STAGE_LABEL[stageOf(level)]}{o.id !== 'player' ? ` · ${o.done} tareas` : ''}</small>
+                <small className="meta">{s.type} · {STAGE_LABEL[stageOf(level)]}{o.id !== 'player' ? t(' · {done} tareas', { done: o.done }) : ''}</small>
               </button>
             );
           })}
         </div>
-        <h4>Especies descubiertas · {seen}/{SPECIES.length * 3} formas</h4>
-        <p className="hint">Las formas se descubren cuando algún compi de la oficina las alcanza: evolucionan en los niveles 3 y 6. Cada tarea entregada da experiencia.</p>
+        <h4>{t('Especies descubiertas · {seen}/{v1} formas', { seen, v1: SPECIES.length * 3 })}</h4>
+        <p className="hint">{t('Las formas se descubren cuando algún compi de la oficina las alcanza: evolucionan en los niveles 3 y 6. Cada tarea entregada da experiencia.')}</p>
         <div className="dex">
           {SPECIES.map((s) => (
             <div key={s.id} className="dexcard" style={{ borderColor: `${s.color}66` }}>
@@ -152,7 +153,7 @@ export function AlbumModal() {
                   </div>
                 ))}
               </div>
-              <p>{reached(s.id) ? s.blurb : 'Contrata a alguien con este compi para descubrirlo.'}</p>
+              <p>{reached(s.id) ? s.blurb : t('Contrata a alguien con este compi para descubrirlo.')}</p>
             </div>
           ))}
         </div>
@@ -215,9 +216,9 @@ export function DialogBox() {
       </div>
       <div className="dialogactions">
         {agent
-          ? <button className="primary" onClick={() => void selectAgent(agent.id, false)}>{full.length > 300 ? 'Leer todo' : 'Responder'}</button>
-          : <button className="primary" onClick={() => setState({ dialog: null, modal: { kind: 'offices', tab: 'work' } })}>Ver encargo</button>}
-        <button onClick={() => setState({ dialog: null })}>Cerrar</button>
+          ? <button className="primary" onClick={() => void selectAgent(agent.id, false)}>{full.length > 300 ? t('Leer todo') : t('Responder')}</button>
+          : <button className="primary" onClick={() => setState({ dialog: null, modal: { kind: 'offices', tab: 'work' } })}>{t('Ver encargo')}</button>}
+        <button onClick={() => setState({ dialog: null })}>{t('Cerrar')}</button>
       </div>
     </div>
   );

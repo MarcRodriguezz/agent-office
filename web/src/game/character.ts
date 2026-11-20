@@ -1,4 +1,5 @@
 import type { Appearance, Facing } from '../types';
+import { t } from '../i18n';
 
 export const SKINS = ['#f6d4b8', '#f1c9a5', '#e8b48c', '#c98d62', '#8d5a3b', '#5c3a25'];
 export const HAIRS = ['short', 'side', 'long', 'bun', 'curly', 'cap', 'bald'];
@@ -8,9 +9,9 @@ export const ACCESSORIES = ['none', 'glasses', 'sunglasses', 'headphones', 'bear
 export const EYES = ['normal', 'happy', 'sleepy'];
 
 export const LABELS: Record<string, string> = {
-  short: 'Corto', side: 'De lado', long: 'Largo', bun: 'Moño', curly: 'Rizado', cap: 'Gorra', bald: 'Calvo',
-  none: 'Nada', glasses: 'Gafas', sunglasses: 'Gafas de sol', headphones: 'Cascos', beard: 'Barba', mustache: 'Bigote',
-  normal: 'Normales', happy: 'Alegres', sleepy: 'Tranquilos',
+  short: t('Corto'), side: t('De lado'), long: t('Largo'), bun: t('Moño'), curly: t('Rizado'), cap: t('Gorra'), bald: t('Calvo'),
+  none: t('Nada'), glasses: t('Gafas'), sunglasses: t('Gafas de sol'), headphones: t('Cascos'), beard: t('Barba'), mustache: t('Bigote'),
+  normal: t('Normales'), happy: t('Alegres'), sleepy: t('Tranquilos'),
 };
 
 const pick = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)];

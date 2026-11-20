@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { drawPortrait } from '../game/character';
 import type { Appearance, Task } from '../types';
+import { locale, t } from '../i18n';
 
 export function Avatar({ appearance, size = 40, bg = '#2a2f3e' }: { appearance: Appearance; size?: number; bg?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -25,7 +26,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}>
         <header>
           <h2>{title}</h2>
-          <button className="icon" onClick={onClose} aria-label="Cerrar">✕</button>
+          <button className="icon" onClick={onClose} aria-label={t('Cerrar')}>✕</button>
         </header>
         <div className="modal-body" onWheel={(e) => e.stopPropagation()}>{children}</div>
       </div>
@@ -90,22 +91,22 @@ export function Markdown({ text }: { text: string }) {
 }
 
 export const TASK_STATUS: Record<Task['status'], { label: string; cls: string }> = {
-  queued: { label: 'En cola', cls: 'muted' },
-  working: { label: 'En curso', cls: 'blue' },
-  delegating: { label: 'Repartida al equipo', cls: 'purple' },
-  done: { label: 'Entregada', cls: 'green' },
-  failed: { label: 'Fallida', cls: 'red' },
+  queued: { label: t('En cola'), cls: 'muted' },
+  working: { label: t('En curso'), cls: 'blue' },
+  delegating: { label: t('Repartida al equipo'), cls: 'purple' },
+  done: { label: t('Entregada'), cls: 'green' },
+  failed: { label: t('Fallida'), cls: 'red' },
 };
 
 export const STATUS_LABEL: Record<string, string> = {
-  idle: 'En su mesa', walking: 'Caminando', working: 'Trabajando', thinking: 'Pensando', talking: 'En reunión',
-  visiting: 'Contigo', waiting: 'Esperando a su equipo', break: 'De descanso', dancing: 'De fiesta',
+  idle: t('En su mesa'), walking: t('Caminando'), working: t('Trabajando'), thinking: t('Pensando'), talking: t('En reunión'),
+  visiting: t('Contigo'), waiting: t('Esperando a su equipo'), break: t('De descanso'), dancing: t('De fiesta'),
 };
 
 export const timeAgo = (ts: number) => {
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-  if (s < 60) return 'ahora';
-  if (s < 3600) return `hace ${Math.floor(s / 60)} min`;
-  if (s < 86400) return `hace ${Math.floor(s / 3600)} h`;
-  return new Date(ts).toLocaleDateString();
+  if (s < 60) return t('ahora');
+  if (s < 3600) return t('hace {v0} min', { v0: Math.floor(s / 60) });
+  if (s < 86400) return t('hace {v0} h', { v0: Math.floor(s / 3600) });
+  return new Date(ts).toLocaleDateString(locale);
 };

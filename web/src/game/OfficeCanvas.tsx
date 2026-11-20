@@ -9,6 +9,7 @@ import { daylight, lampsOf, paintGlow, paintNight, type Lamp } from './daylight'
 import {
   INTERACT_ICON, T, WALL_H, buildFloor, drawConfetti, drawDanceFloor, drawDiscoBall, drawFurniture, drawWall, drawWindow, wallCells, wrapText,
 } from './draw';
+import { t } from '../i18n';
 
 const PANEL_W = 420;
 const ROSTER_W = 220;
@@ -33,7 +34,7 @@ export function runInteraction(f: Furniture) {
   else if (f.interact === 'projects') setState({ modal: { kind: 'projects' } });
   else if (f.interact === 'meeting') setState({ modal: { kind: 'meetings' } });
   else if (f.interact === 'party') void celebrate();
-  else if (f.interact === 'coffee') sayAsPlayer('☕ Mmm, café');
+  else if (f.interact === 'coffee') sayAsPlayer(t('☕ Mmm, café'));
 }
 
 function feet(a: RenderActor): [number, number] {
@@ -437,12 +438,12 @@ export function OfficeCanvas() {
 
       const sorted = [...world.actors.values()].sort((p, q) => p.ry - q.ry);
       for (const a of sorted) {
-        if (a.kind === 'player') drawTag(a, `${state.settings.playerName} (tú) · Nv ${levelOf(state.settings.playerXp)}`, '#ffd76a', false);
+        if (a.kind === 'player') drawTag(a, t('{playerName} (tú) · Nv {v1}', { playerName: state.settings.playerName, v1: levelOf(state.settings.playerXp) }), '#ffd76a', false);
         else {
           const agent = agents.get(a.id);
           const guest = guests.get(a.id);
           if (guest) drawTag(a, `${guest.name} · ${guest.office}`, '#38b6c9', false);
-          if (agent) drawTag(a, `${agent.name} · Nv ${levelOf(agent.xp)}`, agent.teamId ? teams.get(agent.teamId)?.color ?? null : null, a.id === state.selectedAgentId);
+          if (agent) drawTag(a, t('{name} · Nv {v1}', { name: agent.name, v1: levelOf(agent.xp) }), agent.teamId ? teams.get(agent.teamId)?.color ?? null : null, a.id === state.selectedAgentId);
         }
       }
       for (const a of sorted) if (a.bubble) drawBubble(a);
@@ -480,7 +481,7 @@ export function OfficeCanvas() {
           }
           ctx.fill();
         }
-        const label = fx.evolved ? '¡EVOLUCIÓN!' : `¡NIVEL ${fx.level}!`;
+        const label = fx.evolved ? t('¡EVOLUCIÓN!') : t('¡NIVEL {level}!', { level: fx.level });
         ctx.font = `800 15px ${FONT}`;
         ctx.textAlign = 'center';
         ctx.lineWidth = 4;

@@ -1,9 +1,10 @@
 import type { Furniture } from '../types';
+import { t } from '../i18n';
 
 export interface Daylight {
   hour: number;
   dark: number;
-  label: 'Amanecer' | 'Día' | 'Atardecer' | 'Noche';
+  label: string;
   sky: [string, string];
   stars: boolean;
   tint: [number, number, number];
@@ -37,16 +38,16 @@ const mix = (a: string, b: string, t: number) => {
 
 export function daylight(date = new Date()): Daylight {
   const hour = override ?? date.getHours() + date.getMinutes() / 60;
-  if (hour >= 8 && hour < 18.5) return { hour, dark: 0, label: 'Día', sky: ['#8fcdf4', '#c9e9fb'], stars: false, tint: [0, 0, 0] };
+  if (hour >= 8 && hour < 18.5) return { hour, dark: 0, label: t('Día'), sky: ['#8fcdf4', '#c9e9fb'], stars: false, tint: [0, 0, 0] };
   if (hour >= 6.5 && hour < 8) {
-    const t = (hour - 6.5) / 1.5;
-    return { hour, dark: NIGHT * (1 - t), label: 'Amanecer', sky: [mix('#2b3566', '#f2b49a', t), mix('#5a4d7a', '#fbe3c4', t)], stars: false, tint: [30, 22, 60] };
+    const k = (hour - 6.5) / 1.5;
+    return { hour, dark: NIGHT * (1 - k), label: t('Amanecer'), sky: [mix('#2b3566', '#f2b49a', k), mix('#5a4d7a', '#fbe3c4', k)], stars: false, tint: [30, 22, 60] };
   }
   if (hour >= 18.5 && hour < 21.5) {
-    const t = (hour - 18.5) / 3;
-    return { hour, dark: NIGHT * t, label: 'Atardecer', sky: [mix('#f39a52', '#1a2348', t), mix('#fbd29a', '#5b3d6b', t)], stars: t > 0.7, tint: [38, 18, 52] };
+    const k = (hour - 18.5) / 3;
+    return { hour, dark: NIGHT * k, label: t('Atardecer'), sky: [mix('#f39a52', '#1a2348', k), mix('#fbd29a', '#5b3d6b', k)], stars: k > 0.7, tint: [38, 18, 52] };
   }
-  return { hour, dark: NIGHT, label: 'Noche', sky: ['#0b1230', '#1c2850'], stars: true, tint: [10, 14, 40] };
+  return { hour, dark: NIGHT, label: t('Noche'), sky: ['#0b1230', '#1c2850'], stars: true, tint: [10, 14, 40] };
 }
 
 export const clockText = (light: Daylight) => {

@@ -1,3 +1,5 @@
+import { LANG } from './i18n';
+
 export const DEMO = false;
 
 export interface Link {
@@ -15,7 +17,7 @@ export interface LinkEvents {
 export async function request<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
+    headers: body ? { 'content-type': 'application/json', 'x-lang': LANG } : { 'x-lang': LANG },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));

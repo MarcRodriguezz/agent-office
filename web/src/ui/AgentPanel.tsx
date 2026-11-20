@@ -4,6 +4,7 @@ import { setState, toast, useStore, world } from '../store';
 import { levelOf, speciesOf, stageOf } from '../game/creature';
 import { Avatar, Markdown, STATUS_LABEL, TASK_STATUS, timeAgo } from './common';
 import { CreatureView, XpBar } from './Companions';
+import { t } from '../i18n';
 
 export function AgentPanel() {
   const id = useStore((s) => s.selectedAgentId);
@@ -55,16 +56,16 @@ export function AgentPanel() {
           <strong>{agent.name}</strong>
           <span>{agent.role}</span>
           <small>
-            {team ? <b style={{ color: team.color }}>{team.name}{team.leadId === agent.id ? ' · responsable' : ''}</b> : 'Sin departamento'}
+            {team ? <b style={{ color: team.color }}>{team.name}{team.leadId === agent.id ? t(' · responsable') : ''}</b> : t('Sin departamento')}
             {' · '}{STATUS_LABEL[actor?.status ?? 'idle']}
           </small>
         </div>
-        <button className="icon" onClick={() => setState({ selectedAgentId: null })} aria-label="Cerrar">✕</button>
+        <button className="icon" onClick={() => setState({ selectedAgentId: null })} aria-label={t('Cerrar')}>✕</button>
       </header>
       <div className="quick">
-        <button onClick={() => void api('POST', `/agents/${agent.id}/summon`)}>Que venga</button>
-        <button onClick={() => void api('POST', `/agents/${agent.id}/dismiss`)}>A su mesa</button>
-        <button onClick={() => setState({ modal: { kind: 'agent', id: agent.id } })}>Editar</button>
+        <button onClick={() => void api('POST', `/agents/${agent.id}/summon`)}>{t('Que venga')}</button>
+        <button onClick={() => void api('POST', `/agents/${agent.id}/dismiss`)}>{t('A su mesa')}</button>
+        <button onClick={() => setState({ modal: { kind: 'agent', id: agent.id } })}>{t('Editar')}</button>
       </div>
       <div className="compi">
         <CreatureView species={agent.companion.species} stage={stageOf(levelOf(agent.xp))} size={46} />
@@ -73,21 +74,21 @@ export function AgentPanel() {
           <XpBar xp={agent.xp} color={speciesOf(agent.companion.species).color} />
         </div>
       </div>
-      <div className="brainline">Piensa con {provider ? `${provider.name}${agent.model || provider.model ? ` · ${agent.model || provider.model}` : ''}` : 'Sin proveedor'}</div>
+      <div className="brainline">{t('Piensa con {v0}', { v0: provider ? `${provider.name}${agent.model || provider.model ? ` · ${agent.model || provider.model}` : ''}` : t('Sin proveedor') })}</div>
       <div className="workline">
-        <button className="link" onClick={() => setState({ modal: { kind: 'projects', projectId: agent.projectId ?? '' } })}>{project ? project.name : 'Carpeta general'}</button>
-        <span>{session?.turns ? `Sesión en curso · ${session.turns} ${session.turns === 1 ? 'intercambio' : 'intercambios'}` : 'Sesión nueva'}</span>
-        {!!session?.turns && <button onClick={() => void api('POST', `/agents/${agent.id}/session/new`).then(() => toast(`${agent.name} empieza de cero`))}>Empezar de cero</button>}
+        <button className="link" onClick={() => setState({ modal: { kind: 'projects', projectId: agent.projectId ?? '' } })}>{project ? project.name : t('Carpeta general')}</button>
+        <span>{session?.turns ? t('Sesión en curso · {turns} {v1}', { turns: session.turns, v1: session.turns === 1 ? t('intercambio') : t('intercambios') }) : t('Sesión nueva')}</span>
+        {!!session?.turns && <button onClick={() => void api('POST', `/agents/${agent.id}/session/new`).then(() => toast(t('{name} empieza de cero', { name: agent.name })))}>{t('Empezar de cero')}</button>}
       </div>
       <nav className="tabs">
-        <button className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>Conversación</button>
-        <button className={tab === 'tasks' ? 'on' : ''} onClick={() => setTab('tasks')}>Tareas ({mine.length})</button>
+        <button className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>{t('Conversación')}</button>
+        <button className={tab === 'tasks' ? 'on' : ''} onClick={() => setTab('tasks')}>{t('Tareas ({v0})', { v0: mine.length })}</button>
       </nav>
 
       {tab === 'chat' ? (
         <>
           <div className="chat">
-            {!messages?.length && <p className="empty">Salúdale o encárgale algo: «prepárame un plan de lanzamiento…»</p>}
+            {!messages?.length && <p className="empty">{t('Salúdale o encárgale algo: «prepárame un plan de lanzamiento…»')}</p>}
             {messages?.map((m) => (
               <div key={m.id} className={`msg ${m.sender}`}>
                 <Markdown text={m.text} />
@@ -97,19 +98,19 @@ export function AgentPanel() {
             <div ref={end} />
           </div>
           <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-            <textarea value={text} placeholder={`Habla con ${agent.name}…`} rows={2}
+            <textarea value={text} placeholder={t('Habla con {name}…', { name: agent.name })} rows={2}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-            <button className="primary" type="submit">Enviar</button>
+            <button className="primary" type="submit">{t('Enviar')}</button>
           </form>
         </>
       ) : (
         <div className="tasklist">
           <div className="newtask">
-            <input value={title} placeholder="Título de la tarea" onChange={(e) => setTitle(e.target.value)} />
-            <textarea value={description} rows={3} placeholder="Describe el encargo con el detalle que necesite…"
+            <input value={title} placeholder={t('Título de la tarea')} onChange={(e) => setTitle(e.target.value)} />
+            <textarea value={description} rows={3} placeholder={t('Describe el encargo con el detalle que necesite…')}
               onChange={(e) => setDescription(e.target.value)} />
-            <button className="primary" onClick={() => void assign()} disabled={!title.trim()}>Encargar a {agent.name}</button>
+            <button className="primary" onClick={() => void assign()} disabled={!title.trim()}>{t('Encargar a {name}', { name: agent.name })}</button>
           </div>
           {mine.map((t) => (
             <button key={t.id} className="taskrow" onClick={() => setState({ modal: { kind: 'tasks', taskId: t.id } })}>

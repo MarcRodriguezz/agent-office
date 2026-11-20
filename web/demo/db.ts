@@ -1,3 +1,5 @@
+import { fmt, type Msg } from '../../backend/src/i18n.js';
+
 const uid = () => crypto.randomUUID();
 const copy = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 
@@ -77,8 +79,8 @@ export const store = {
   failUnfinishedTasks() {},
 
   feed: (limit = 30) => copy(feed.slice(-limit)),
-  addFeed(text: string) {
-    const e = { id: uid(), text, createdAt: Date.now() };
+  addFeed(msg: Msg) {
+    const e = { id: uid(), text: fmt('es', msg), msg, createdAt: Date.now() };
     feed.push(e);
     return copy(e);
   },

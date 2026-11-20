@@ -1,6 +1,7 @@
 import { applyActors, getState, setState, toast, world } from './store';
 import { openLink, request, type Link } from './transport';
 import type { ChatMessage, GoTarget, HubOffice, Layout, MapData, Task, ToolAction } from './types';
+import { LANG, rememberLang, t, type Lang } from './i18n';
 
 const OFFICE_KEY = 'agent-office:oficina';
 
@@ -130,7 +131,7 @@ function handle(msg: any) {
       break;
     case 'delivery': {
       const agent = getState().agents.find((a) => a.id === msg.agentId);
-      if (!msg.ok) toast(`${agent?.name ?? 'Un agente'} no pudo completar «${msg.title}»`, false, msg.agentId);
+      if (!msg.ok) toast(t('{v0} no pudo completar «{title}»', { v0: agent?.name ?? t('Un agente'), title: msg.title }), false, msg.agentId);
       break;
     }
   }
@@ -157,7 +158,7 @@ export async function bootstrap() {
   const hub = await refreshHub();
   const wanted = getState().officeId || localStorage.getItem(OFFICE_KEY) || '';
   const office = hub.find((o) => o.id === wanted && o.online) ?? hub.find((o) => o.online);
-  if (!office) throw new Error('ninguna oficina responde todavía');
+  if (!office) throw new Error(t('ninguna oficina responde todavía'));
   generation++;
   socket?.close();
   setState({ officeId: office.id });
@@ -172,6 +173,13 @@ export async function bootstrap() {
     meetings: data.meetings ?? [], party: data.party ?? 0,
   });
   connect();
+  if (data.settings.lang && data.settings.lang !== LANG) void api('PATCH', '/settings', { lang: LANG }).catch(() => null);
+}
+
+export async function changeLang(lang: Lang) {
+  rememberLang(lang);
+  await api('PATCH', '/settings', { lang }).catch(() => null);
+  location.reload();
 }
 
 export async function switchOffice(id: string) {
@@ -193,8 +201,8 @@ export async function saveLayout(layout: Layout | { reset: true }, quiet = false
   }
 }
 
-export const copy = (text: string, done = 'Copiado') =>
-  navigator.clipboard.writeText(text).then(() => toast(done), () => toast('El navegador no ha dejado copiar. Selecciona el texto y cópialo a mano.', false));
+export const copy = (text: string, done = t('Copiado')) =>
+  navigator.clipboard.writeText(text).then(() => toast(done), () => toast(t('El navegador no ha dejado copiar. Selecciona el texto y cópialo a mano.'), false));
 
 export function go(target: GoTarget): Promise<boolean> {
   if (!socket?.isOpen()) return Promise.resolve(false);

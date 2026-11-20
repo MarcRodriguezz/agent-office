@@ -1,5 +1,6 @@
 import { mock } from '../../backend/src/mock.js';
 import { hub } from './hub';
+import { t } from '../../backend/src/i18n.js';
 
 const recent: any[] = [];
 const totals = { completed: 0, failed: 0 };
@@ -12,7 +13,7 @@ const publish = () => hub.broadcast({ type: 'jobs', ...jobsState() });
 
 export async function complete(data: any): Promise<{ text: string }> {
   const info = {
-    id: crypto.randomUUID(), agentName: data.agentName, intent: data.intent, provider: data.provider.name, node: 'Tu navegador',
+    id: crypto.randomUUID(), agentName: data.agentName, intent: data.intent, provider: data.provider.name, node: t('Tu navegador'),
     status: 'active', startedAt: Date.now(), ms: null as number | null, error: '',
   };
   recent.unshift(info);
@@ -20,7 +21,7 @@ export async function complete(data: any): Promise<{ text: string }> {
   publish();
   try {
     if (data.provider.kind !== 'mock') {
-      throw new Error('La demo del navegador solo piensa con el cerebro simulado. Instala Agent Office con Docker para conectar modelos reales.');
+      throw new Error(t('La demo del navegador solo piensa con el cerebro simulado. Instala Agent Office con Docker para conectar modelos reales.'));
     }
     const text = await mock(data);
     info.status = 'completed';
