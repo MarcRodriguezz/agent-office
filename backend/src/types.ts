@@ -123,9 +123,12 @@ export interface TaskOrigin {
   office: string;
 }
 
+import type { Lang, Msg } from './i18n.js';
+
 export interface FeedEvent {
   id: string;
   text: string;
+  msg?: Msg;
   createdAt: number;
 }
 
@@ -144,6 +147,7 @@ export interface LlmJob {
   agentName: string;
   hint?: { reports?: { id: string; name: string; role: string }[] };
   work?: Work;
+  lang?: Lang;
 }
 
 export interface LlmResult {

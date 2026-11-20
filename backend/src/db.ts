@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
+import { fmt, type Msg } from './i18n.js';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomCompanion } from './companions.js';
@@ -52,6 +53,18 @@ db.exec(`
 `);
 
 type Row = Record<string, any>;
+
+function toFeed(id: string, raw: string, createdAt: number): FeedEvent {
+  if (raw.startsWith('{"k":')) {
+    try {
+      const msg = JSON.parse(raw) as Msg;
+      return { id, text: fmt('es', msg), msg, createdAt };
+    } catch {
+      return { id, text: raw, createdAt };
+    }
+  }
+  return { id, text: raw, createdAt };
+}
 
 const agentColumns = (db.prepare('PRAGMA table_info(agents)').all() as Row[]).map((r) => r.name);
 if (!agentColumns.includes('companion')) db.exec('ALTER TABLE agents ADD COLUMN companion TEXT');
@@ -246,12 +259,14 @@ export const store = {
 
   feed(limit = 30): FeedEvent[] {
     return (db.prepare('SELECT * FROM feed ORDER BY created_at DESC, rowid DESC LIMIT ?').all(limit) as Row[])
-      .map((r) => ({ id: r.id, text: r.text, createdAt: r.created_at })).reverse();
+      .map((r) => toFeed(r.id, r.text, r.created_at)).reverse();
   },
-  addFeed(text: string): FeedEvent {
-    const e: FeedEvent = { id: randomUUID(), text, createdAt: Date.now() };
-    db.prepare('INSERT INTO feed (id, text, created_at) VALUES (?, ?, ?)').run(e.id, text, e.createdAt);
-    return e;
+  addFeed(msg: Msg): FeedEvent {
+    const id = randomUUID();
+    const createdAt = Date.now();
+    const raw = JSON.stringify(msg);
+    db.prepare('INSERT INTO feed (id, text, created_at) VALUES (?, ?, ?)').run(id, raw, createdAt);
+    return toFeed(id, raw, createdAt);
   },
 
   nodes(): NodeRecord[] {

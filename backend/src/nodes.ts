@@ -4,6 +4,7 @@ import { store } from './db.js';
 import { hub } from './hub.js';
 import { toolCommand, type ToolAction } from './tools.js';
 import type { LlmJob, LlmResult, NodeInfo } from './types.js';
+import { t } from './i18n.js';
 
 export const LOCAL = 'local';
 
@@ -39,7 +40,7 @@ export function nodesState() {
   const row = (id: string, name: string, local: boolean) => ({
     id, name, local, online: !!first(id), info: live.get(id)?.info ?? null, active: activeOn(id),
   });
-  return [row(LOCAL, 'Esta oficina', true), ...store.nodes().map((n) => row(n.id, n.name, false))];
+  return [row(LOCAL, t('Esta oficina'), true), ...store.nodes().map((n) => row(n.id, n.name, false))];
 }
 
 export const publishNodes = () => hub.broadcast({ type: 'nodes', nodes: nodesState() });
@@ -47,7 +48,7 @@ export const publishNodes = () => hub.broadcast({ type: 'nodes', nodes: nodesSta
 export const isRemote = (nodeId: string | null | undefined): nodeId is string =>
   !!nodeId && nodeId !== LOCAL && store.nodes().some((n) => n.id === nodeId);
 
-export const nodeName = (nodeId: string) => store.nodes().find((n) => n.id === nodeId)?.name ?? 'Servidor';
+export const nodeName = (nodeId: string) => store.nodes().find((n) => n.id === nodeId)?.name ?? t('Servidor');
 
 export function attachNode(nodeId: string, ws: WebSocket) {
   const entry = live.get(nodeId) ?? { sockets: new Set<WebSocket>(), info: null };
@@ -71,7 +72,7 @@ export function attachNode(nodeId: string, ws: WebSocket) {
       pending.delete(msg.id);
       clearTimeout(job.timer);
       if (msg.ok) job.resolve({ text: String(msg.text ?? ''), cliId: msg.cliId ? String(msg.cliId) : undefined });
-      else job.reject(new Error(String(msg.error ?? 'Error en el servidor remoto.')));
+      else job.reject(new Error(String(msg.error ?? t('Error en el servidor remoto.'))));
       publishNodes();
     } else if (msg.type === 'term' || msg.type === 'term-exit') {
       const term = terms.get(msg.sid);
@@ -87,7 +88,7 @@ export function attachNode(nodeId: string, ws: WebSocket) {
       if (job.socket !== ws) continue;
       pending.delete(id);
       clearTimeout(job.timer);
-      job.reject(new Error(`Se perdió la conexión con el servidor «${nodeName(nodeId)}» durante el trabajo.`));
+      job.reject(new Error(t('Se perdió la conexión con el servidor «{v0}» durante el trabajo.', { v0: nodeName(nodeId) })));
     }
     for (const [sid, term] of terms) {
       if (term.node !== ws) continue;
@@ -104,12 +105,12 @@ export function nodeByToken(token: string) {
 
 export function runOnNode(nodeId: string, data: LlmJob, timeoutMs: number): Promise<LlmResult> {
   const socket = first(nodeId);
-  if (!socket) return Promise.reject(new Error(`El servidor «${nodeName(nodeId)}» no está conectado.`));
+  if (!socket) return Promise.reject(new Error(t('El servidor «{v0}» no está conectado.', { v0: nodeName(nodeId) })));
   const id = randomUUID();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
-      reject(new Error(`El servidor «${nodeName(nodeId)}» no ha respondido a tiempo.`));
+      reject(new Error(t('El servidor «{v0}» no ha respondido a tiempo.', { v0: nodeName(nodeId) })));
     }, timeoutMs);
     pending.set(id, { nodeId, socket, resolve, reject, timer });
     send(socket, { type: 'job', id, data });

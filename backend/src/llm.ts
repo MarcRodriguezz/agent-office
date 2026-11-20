@@ -4,6 +4,7 @@ import { hub } from './hub.js';
 import { isRemote, nodeName, runOnNode } from './nodes.js';
 import { QUEUE_NAME, connection } from './queue-config.js';
 import type { JobInfo, LlmJob, LlmResult } from './types.js';
+import { lang, t } from './i18n.js';
 
 const TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 15 * 60 * 1000);
 
@@ -42,12 +43,13 @@ async function runLocal(data: LlmJob, info: JobInfo): Promise<LlmResult> {
   }
 }
 
-export async function complete(data: LlmJob, nodeId: string | null = null): Promise<LlmResult> {
+export async function complete(input: LlmJob, nodeId: string | null = null): Promise<LlmResult> {
+  const data: LlmJob = { ...input, lang: input.lang ?? lang() };
   const remote = isRemote(nodeId);
   const info: JobInfo = {
     id: randomUUID(), agentName: data.agentName, intent: data.intent,
     provider: `${data.provider.name}${data.provider.model ? ` · ${data.provider.model}` : ''}`,
-    node: remote ? nodeName(nodeId) : 'Esta oficina',
+    node: remote ? nodeName(nodeId) : t('Esta oficina'),
     status: remote ? 'active' : 'waiting', startedAt: Date.now(), ms: null, error: '',
   };
   recent.unshift(info);

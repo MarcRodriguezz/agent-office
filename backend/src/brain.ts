@@ -10,6 +10,7 @@ import { currentSession, recordTurn, workFor } from './sessions.js';
 import { publishSettings } from './settings.js';
 import { toolOf } from './tools.js';
 import type { Agent, Intent, LlmJob, Provider, Task, TaskOrigin, Team, Visitor } from './types.js';
+import { m, N, relabel, t, tr, type Lang, type Msg } from './i18n.js';
 
 interface Runtime {
   agent: Agent;
@@ -43,10 +44,10 @@ export const events = {
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const pick = <T>(items: T[]): T => items[Math.floor(Math.random() * items.length)];
 const sameCell = (a: Cell, b: Cell) => a[0] === b[0] && a[1] === b[1];
-const TASK_TAG = /\[\[\s*TAREA\s*:\s*([\s\S]+?)\]\]/i;
+const TASK_TAG = /\[\[\s*(?:TAREA|TASK)\s*:\s*([\s\S]+?)\]\]/i;
 
-export function feed(text: string) {
-  hub.broadcast({ type: 'feed', event: store.addFeed(text) });
+export function feed(msg: Msg) {
+  hub.broadcast({ type: 'feed', event: store.addFeed(msg) });
 }
 
 function celebrate(id: string, who: string, pet: string, before: number, after: number) {
@@ -54,7 +55,7 @@ function celebrate(id: string, who: string, pet: string, before: number, after: 
   if (level <= levelOf(before)) return;
   const evolved = stageOf(level) > stageOf(levelOf(before));
   hub.broadcast({ type: 'levelup', actorId: id, level, evolved });
-  feed(evolved ? `¡${pet}, el compi de ${who}, ha evolucionado!` : `${who} y ${pet} suben al nivel ${level}`);
+  feed(evolved ? m('¡{pet}, el compi de {who}, ha evolucionado!', { pet, who }) : m('{who} y {pet} suben al nivel {level}', { who, pet, level }));
 }
 
 function award(rt: Runtime, amount: number) {
@@ -70,7 +71,7 @@ function awardPlayer(amount: number) {
   const before = store.setting('playerXp', 0);
   store.setSetting('playerXp', before + amount);
   const pet = store.setting<{ name: string } | null>('playerCompanion', null);
-  if (pet) celebrate('player', store.setting('playerName', 'Jefe'), pet.name, before, before + amount);
+  if (pet) celebrate('player', store.setting('playerName', t('Jefe')), pet.name, before, before + amount);
   publishSettings();
 }
 
@@ -118,7 +119,7 @@ function enqueue<T>(rt: Runtime, fn: () => Promise<T>): Promise<T> {
 function providerFor(agent: Agent): Provider {
   const id = agent.providerId ?? store.setting<string | null>('defaultProviderId', null);
   const provider = (id && store.provider(id)) || store.providers()[0];
-  if (!provider) throw new Error('No hay ningún proveedor LLM configurado.');
+  if (!provider) throw new Error(t('No hay ningún proveedor LLM configurado.'));
   return agent.model ? { ...provider, model: agent.model } : provider;
 }
 
@@ -135,52 +136,52 @@ function reportsOf(agent: Agent): Agent[] {
 }
 
 function systemPrompt(agent: Agent): string {
-  const boss = store.setting('playerName', 'Jefe');
+  const boss = store.setting('playerName', t('Jefe'));
   const team = teamOf(agent);
   const teams = store.teams();
   const manager = managerId();
   const mates = store.agents().filter((a) => a.id !== agent.id).map((a) => {
-    const t = teams.find((x) => x.id === a.teamId);
-    return `- ${a.name}: ${a.role}${t ? ` (${t.name}${t.leadId === a.id ? ', responsable' : ''})` : ''}${a.id === manager ? ' (dirige la oficina)' : ''}`;
+    const team = teams.find((x) => x.id === a.teamId);
+    return `- ${a.name}: ${a.role}${team ? ` (${team.name}${team.leadId === a.id ? t(', responsable') : ''})` : ''}${a.id === manager ? t(' (dirige la oficina)') : ''}`;
   });
   return [
-    `Eres ${agent.name}, ${agent.role} en una oficina. Tu jefe directo se llama ${boss} y es quien habla contigo.`,
-    agent.personality ? `Personalidad: ${agent.personality}` : '',
-    agent.id === manager ? 'Eres manager de toda la oficina: coordinas a todas las personas y departamentos, y respondes ante tu jefe.' : '',
-    team ? `Perteneces al departamento «${team.name}»${team.leadId === agent.id ? ' y eres su responsable' : ''}.${team.mission ? ` Misión del departamento: ${team.mission}` : ''}` : '',
-    mates.length ? `Compañeros de oficina:\n${mates.join('\n')}` : '',
+    t('Eres {name}, {role} en una oficina. Tu jefe directo se llama {boss} y es quien habla contigo.', { name: agent.name, role: agent.role, boss }),
+    agent.personality ? t('Personalidad: {personality}', { personality: agent.personality }) : '',
+    agent.id === manager ? t('Eres manager de toda la oficina: coordinas a todas las personas y departamentos, y respondes ante tu jefe.') : '',
+    team ? t('Perteneces al departamento «{name}»{v1}.{v2}', { name: team.name, v1: team.leadId === agent.id ? t(' y eres su responsable') : '', v2: team.mission ? t(' Misión del departamento: {mission}', { mission: team.mission }) : '' }) : '',
+    mates.length ? t('Compañeros de oficina:\n{v0}', { v0: mates.join('\n') }) : '',
     workContext(agent),
-    agent.instructions ? `Instrucciones adicionales:\n${agent.instructions}` : '',
-    'Habla como una persona real de la oficina: natural, directa y sin relleno. Responde en el idioma en el que te hablen.',
+    agent.instructions ? t('Instrucciones adicionales:\n{instructions}', { instructions: agent.instructions }) : '',
+    t('Habla como una persona real de la oficina: natural, directa y sin relleno. Responde en el idioma en el que te hablen.'),
   ].filter(Boolean).join('\n\n');
 }
 
 const ACCESS_TEXT = {
-  read: 'Puedes consultar los ficheros, pero no modificarlos ni ejecutar comandos.',
-  edit: 'Puedes leer, crear y modificar ficheros.',
-  full: 'Tienes libertad total: puedes modificar ficheros, ejecutar comandos e instalar lo que necesites.',
+  read: N('Puedes consultar los ficheros, pero no modificarlos ni ejecutar comandos.'),
+  edit: N('Puedes leer, crear y modificar ficheros.'),
+  full: N('Tienes libertad total: puedes modificar ficheros, ejecutar comandos e instalar lo que necesites.'),
 };
 
 function workContext(agent: Agent): string {
   const project = agent.projectId ? store.projects().find((p) => p.id === agent.projectId) : undefined;
   const tools = store.connections().filter((c) => agent.connections.includes(c.id)).map((c) => {
     const def = toolOf(c.tool);
-    return `- ${c.name}${c.bin ? ` (comando ${c.bin})` : ''}${def ? `: ${def.summary}` : ''}`;
+    return `- ${c.name}${c.bin ? t(' (comando {bin})', { bin: c.bin }) : ''}${def ? `: ${tr(def.summary)}` : ''}`;
   });
   return [
     project
-      ? `Trabajas en el proyecto «${project.name}», cuya carpeta es tu directorio de trabajo.${project.description ? ` ${project.description}` : ''}`
-      : 'Trabajas en la carpeta general de la oficina.',
-    ACCESS_TEXT[agent.access],
-    tools.length ? `Tienes acceso a estas herramientas externas (las credenciales ya están en tu entorno):\n${tools.join('\n')}` : '',
+      ? t('Trabajas en el proyecto «{name}», cuya carpeta es tu directorio de trabajo.{v1}', { name: project.name, v1: project.description ? ` ${project.description}` : '' })
+      : t('Trabajas en la carpeta general de la oficina.'),
+    tr(ACCESS_TEXT[agent.access]),
+    tools.length ? t('Tienes acceso a estas herramientas externas (las credenciales ya están en tu entorno):\n{v0}', { v0: tools.join('\n') }) : '',
   ].filter(Boolean).join('\n');
 }
 
 const CHAT_RULES = [
-  'Estás conversando en persona con tu jefe. Responde de forma breve (1 a 4 frases) salvo que te pida detalle.',
-  'Si te encarga un trabajo que requiere elaboración (un informe, código, un análisis, un plan, un texto…), confirma en una frase y añade al final, en una línea aparte, exactamente: [[TAREA: descripción completa y autocontenida del encargo]]. Entonces irás a tu mesa a hacerlo y se lo entregarás al terminar.',
-  'Para preguntas rápidas o charla, responde directamente y no uses esa etiqueta.',
-].join('\n');
+  N('Estás conversando en persona con tu jefe. Responde de forma breve (1 a 4 frases) salvo que te pida detalle.'),
+  N('Si te encarga un trabajo que requiere elaboración (un informe, código, un análisis, un plan, un texto…), confirma en una frase y añade al final, en una línea aparte, exactamente: [[TAREA: descripción completa y autocontenida del encargo]]. Entonces irás a tu mesa a hacerlo y se lo entregarás al terminar.'),
+  N('Para preguntas rápidas o charla, responde directamente y no uses esa etiqueta.'),
+];
 
 export async function ask(agent: Agent, intent: Intent, prompt: string, hint?: LlmJob['hint']): Promise<string> {
   const result = await complete({
@@ -239,19 +240,19 @@ export const titleOf = (text: string) => {
 };
 
 async function reply(rt: Runtime, text: string) {
-  say(rt.actor, rt.thinking ? 'Termino lo que tengo entre manos y te contesto' : '💭 …', 120000);
+  say(rt.actor, rt.thinking ? t('Termino lo que tengo entre manos y te contesto') : '💭 …', 120000);
   try {
-    const raw = await think(rt, 'chat', text, CHAT_RULES);
+    const raw = await think(rt, 'chat', text, CHAT_RULES.map((rule) => tr(rule)).join('\n'));
     const tag = raw.match(TASK_TAG);
-    post(rt, raw.replace(TASK_TAG, '').trim() || 'Me pongo con ello.');
+    post(rt, raw.replace(TASK_TAG, '').trim() || t('Me pongo con ello.'));
     award(rt, 4);
     if (tag && runtimes.get(rt.agent.id) === rt) {
       const task = createTask(rt.agent.id, null, titleOf(tag[1]), tag[1].trim());
-      feed(`${rt.agent.name} acepta el encargo «${task.title}»`);
+      feed(m('{name} acepta el encargo «{title}»', { name: rt.agent.name, title: task.title }));
       void startTask(rt, task);
     }
   } catch (err) {
-    post(rt, `⚠️ No he podido responder: ${err instanceof Error ? err.message : err}`);
+    post(rt, t('⚠️ No he podido responder: {v0}', { v0: err instanceof Error ? err.message : err }));
   }
 }
 
@@ -291,25 +292,25 @@ function taskPrompt(task: Task): string {
   const lead = parent ? store.agents().find((a) => a.id === parent.agentId) : undefined;
   return [
     parent
-      ? `${lead?.name ?? 'Tu responsable'} te encarga esta parte del proyecto «${parent.title}».`
+      ? t('{v0} te encarga esta parte del proyecto «{title}».', { v0: lead?.name ?? t('Tu responsable'), title: parent.title })
       : task.origin
-        ? `La oficina «${task.origin.office}», con la que colabora la vuestra, os ha encargado este trabajo.`
-        : 'Tu jefe te ha encargado este trabajo.',
-    `Título: ${task.title}`,
-    `Encargo:\n${task.description || task.title}`,
-    'Hazlo ahora y devuelve directamente el resultado final, completo y listo para entregar, en Markdown. No pidas aclaraciones: si falta algún dato, asume lo razonable e indícalo.',
+        ? t('La oficina «{office}», con la que colabora la vuestra, os ha encargado este trabajo.', { office: task.origin.office })
+        : t('Tu jefe te ha encargado este trabajo.'),
+    t('Título: {title}', { title: task.title }),
+    t('Encargo:\n{v0}', { v0: task.description || task.title }),
+    t('Hazlo ahora y devuelve directamente el resultado final, completo y listo para entregar, en Markdown. No pidas aclaraciones: si falta algún dato, asume lo razonable e indícalo.'),
   ].join('\n\n');
 }
 
 function planPrompt(task: Task, reports: Agent[]): string {
   return [
-    'Tu jefe te ha encargado este trabajo y tú diriges un equipo.',
-    `Título: ${task.title}`,
-    `Encargo:\n${task.description || task.title}`,
-    `Personas a tu cargo:\n${reports.map((r) => `- id "${r.id}" · ${r.name} · ${r.role}`).join('\n')}`,
-    'Reparte el trabajo entre quienes aporten valor. Responde ÚNICAMENTE con JSON válido, sin texto alrededor, con esta forma:',
-    '{"subtasks":[{"agentId":"<id>","title":"título corto","description":"instrucciones completas y autocontenidas"}]}',
-    'Como máximo una subtarea por persona. Si el encargo es trivial y prefieres hacerlo tú, devuelve {"subtasks":[]}.',
+    t('Tu jefe te ha encargado este trabajo y tú diriges un equipo.'),
+    t('Título: {title}', { title: task.title }),
+    t('Encargo:\n{v0}', { v0: task.description || task.title }),
+    t('Personas a tu cargo:\n{v0}', { v0: reports.map((r) => t('- id "{id}" · {name} · {role}', { id: r.id, name: r.name, role: r.role })).join('\n') }),
+    t('Reparte el trabajo entre quienes aporten valor. Responde ÚNICAMENTE con JSON válido, sin texto alrededor, con esta forma:'),
+    t('{"subtasks":[{"agentId":"<id>","title":"título corto","description":"instrucciones completas y autocontenidas"}]}'),
+    t('Como máximo una subtarea por persona. Si el encargo es trivial y prefieres hacerlo tú, devuelve {"subtasks":[]}.'),
   ].join('\n\n');
 }
 
@@ -342,7 +343,7 @@ async function delegate(rt: Runtime, task: Task, reports: Agent[]): Promise<stri
   if (!plan.length) return think(rt, 'task', taskPrompt(task));
 
   updateTask(task, { status: 'delegating' });
-  feed(`${agent.name} convoca una reunión de equipo para «${task.title}»`);
+  feed(m('{name} convoca una reunión de equipo para «{title}»', { name: agent.name, title: task.title }));
   let over = false;
   let release = () => {};
   const released = new Promise<void>((r) => (release = r));
@@ -359,7 +360,7 @@ async function delegate(rt: Runtime, task: Task, reports: Agent[]): Promise<stri
   }));
 
   setStatus(actor, 'walking');
-  say(actor, '📣 ¡Reunión de equipo!', 3500);
+  say(actor, t('📣 ¡Reunión de equipo!'), 3500);
   await walkTo(actor, map.meetingSeats[0]);
   face(actor, 'down');
   setStatus(actor, 'talking');
@@ -371,10 +372,10 @@ async function delegate(rt: Runtime, task: Task, reports: Agent[]): Promise<stri
     if (!member) continue;
     say(actor, `${member.agent.name}: ${item.title}`, 3400);
     await sleep(2800);
-    say(member.actor, pick(['¡Hecho!', 'Me pongo con ello', 'Vale, lo tengo', 'Entendido 👍', 'Cuenta conmigo']), 2600);
+    say(member.actor, pick([t('¡Hecho!'), t('Me pongo con ello'), t('Vale, lo tengo'), t('Entendido 👍'), t('Cuenta conmigo')]), 2600);
     await sleep(1300);
     const sub = createTask(member.agent.id, task.id, item.title, item.description);
-    feed(`${agent.name} encarga a ${member.agent.name}: «${item.title}»`);
+    feed(m('{name} encarga a {name2}: «{title}»', { name: agent.name, name2: member.agent.name, title: item.title }));
     pending.push(startTask(member, sub));
   }
   over = true;
@@ -386,13 +387,13 @@ async function delegate(rt: Runtime, task: Task, reports: Agent[]): Promise<stri
   setStatus(actor, 'working');
   const names = new Map(store.agents().map((a) => [a.id, a.name]));
   const body = subs.map((s) =>
-    `## ${names.get(s.agentId) ?? 'Compañero'} — ${s.title}\n${s.status === 'done' ? s.result : `NO ENTREGADO: ${s.result}`}`,
+    `## ${names.get(s.agentId) ?? t('Compañero')} — ${s.title}\n${s.status === 'done' ? s.result : t('NO ENTREGADO: {result}', { result: s.result })}`,
   ).join('\n\n');
   const text = await ask(agent, 'synth', [
-    `Tu jefe te encargó: «${task.title}».`,
-    `Encargo original:\n${task.description || task.title}`,
-    `Tu equipo ha entregado estas partes:\n\n${body}`,
-    'Intégralo todo en un único resultado final coherente y completo, en Markdown, listo para entregar al jefe. Corrige incoherencias y completa lo que falte.',
+    t('Tu jefe te encargó: «{title}».', { title: task.title }),
+    t('Encargo original:\n{v0}', { v0: task.description || task.title }),
+    t('Tu equipo ha entregado estas partes:\n\n{body}', { body }),
+    t('Intégralo todo en un único resultado final coherente y completo, en Markdown, listo para entregar al jefe. Corrige incoherencias y completa lo que falte.'),
   ].join('\n\n'));
   remember(agent, taskPrompt(task), text);
   return text;
@@ -409,7 +410,7 @@ async function deliver(rt: Runtime, task: Task) {
     await walkTo(actor, deskVisitor(lead.agent.desk));
     face(actor, 'up');
     setStatus(actor, 'talking');
-    say(actor, ok ? `${lead.agent.name}, aquí tienes: ${task.title}` : `${lead.agent.name}, no he podido con «${task.title}»`, 3500);
+    say(actor, ok ? t('{name}, aquí tienes: {title}', { name: lead.agent.name, title: task.title }) : t('{name}, no he podido con «{title}»', { name: lead.agent.name, title: task.title }), 3500);
     await sleep(2600);
     return;
   }
@@ -417,8 +418,8 @@ async function deliver(rt: Runtime, task: Task) {
     await walkTo(actor, map.entrance);
     face(actor, 'down');
     setStatus(actor, 'talking');
-    say(actor, ok ? `📨 Enviado a ${task.origin.office}: «${task.title}»` : `📨 Aviso a ${task.origin.office}: no ha salido «${task.title}»`, 4000);
-    feed(ok ? `${agent.name} envía «${task.title}» a ${task.origin.office}` : `${agent.name} no ha podido completar el encargo de ${task.origin.office}`);
+    say(actor, ok ? t('📨 Enviado a {office}: «{title}»', { office: task.origin.office, title: task.title }) : t('📨 Aviso a {office}: no ha salido «{title}»', { office: task.origin.office, title: task.title }), 4000);
+    feed(ok ? m('{name} envía «{title}» a {office}', { name: agent.name, title: task.title, office: task.origin.office }) : m('{name} no ha podido completar el encargo de {office}', { name: agent.name, office: task.origin.office }));
     await sleep(2600);
     return;
   }
@@ -427,11 +428,11 @@ async function deliver(rt: Runtime, task: Task) {
   setStatus(actor, 'visiting');
   const message = store.addMessage(agent.id, 'agent', ok
     ? `✅ **${task.title}**\n\n${task.result}`
-    : `❌ No he podido completar «${task.title}»: ${task.result}`);
+    : t('❌ No he podido completar «{title}»: {result}', { title: task.title, result: task.result }));
   hub.broadcast({ type: 'message', message });
   hub.broadcast({ type: 'delivery', agentId: agent.id, taskId: task.id, title: task.title, ok });
-  say(actor, ok ? `¡Listo! Te traigo «${task.title}»` : `Jefe, he tenido un problema con «${task.title}»`, 6000);
-  feed(ok ? `${agent.name} entrega «${task.title}»` : `${agent.name} no ha podido completar «${task.title}»`);
+  say(actor, ok ? t('¡Listo! Te traigo «{title}»', { title: task.title }) : t('Jefe, he tenido un problema con «{title}»', { title: task.title }), 6000);
+  feed(ok ? m('{name} entrega «{title}»', { name: agent.name, title: task.title }) : m('{name} no ha podido completar «{title}»', { name: agent.name, title: task.title }));
   if (ok) awardPlayer(20);
   await pause(rt, 7000);
 }
@@ -462,7 +463,7 @@ export function assignTask(agentId: string, title: string, description: string):
   const rt = runtimes.get(agentId);
   if (!rt) return null;
   const task = createTask(agentId, null, titleOf(title), description);
-  feed(`Encargas a ${rt.agent.name}: «${task.title}»`);
+  feed(m('Encargas a {name}: «{title}»', { name: rt.agent.name, title: task.title }));
   void startTask(rt, task);
   return task;
 }
@@ -483,7 +484,7 @@ function leadOf(teamId: string): { team: Team; lead: Agent } | null {
 export function assignTeamTask(teamId: string, title: string, description: string): Task | null {
   const found = leadOf(teamId);
   if (!found) return null;
-  feed(`Encargo para el departamento ${found.team.name}: «${titleOf(title)}»`);
+  feed(m('Encargo para el departamento {name}: «{v1}»', { name: found.team.name, v1: titleOf(title) }));
   return assignTask(found.lead.id, title, description);
 }
 
@@ -492,7 +493,7 @@ export function assignRemoteTask(origin: TaskOrigin, kind: 'agent' | 'team', tar
   const rt = agentId ? runtimes.get(agentId) : undefined;
   if (!rt) return null;
   const task = createTask(rt.agent.id, null, titleOf(title), description, origin);
-  feed(`${origin.office} encarga a ${rt.agent.name}: «${task.title}»`);
+  feed(m('{office} encarga a {name}: «{title}»', { office: origin.office, name: rt.agent.name, title: task.title }));
   void startTask(rt, task);
   return task;
 }
@@ -506,16 +507,16 @@ async function visit(who: Omit<Visitor, 'id'>, title: string, ok: boolean, resul
   const actor = addActor(id, 'visitor', map.entrance, null);
   try {
     setStatus(actor, 'walking');
-    say(actor, `👋 Vengo de ${who.office}`, 3000);
+    say(actor, t('👋 Vengo de {office}', { office: who.office }), 3000);
     await walkTo(actor, spotNearPlayer(actor));
     faceTowards(actor, player);
     setStatus(actor, 'visiting');
-    say(actor, ok ? `¡Hola! Te traigo «${title}»` : `Lo siento, no ha salido «${title}»`, 6000);
+    say(actor, ok ? t('¡Hola! Te traigo «{title}»', { title }) : t('Lo siento, no ha salido «{title}»', { title }), 6000);
     hub.broadcast({
       type: 'dialog', name: `${who.name} · ${who.office}`, appearance: who.appearance, companion: who.companion, xp: who.xp,
-      text: ok ? `✅ ${title}\n\n${result}` : `❌ No hemos podido completar «${title}»: ${result}`,
+      text: ok ? `✅ ${title}\n\n${result}` : t('❌ No hemos podido completar «{title}»: {result}', { title, result }),
     });
-    feed(ok ? `${who.name}, de ${who.office}, entrega «${title}»` : `${who.office} no ha podido completar «${title}»`);
+    feed(ok ? m('{name}, de {office}, entrega «{title}»', { name: who.name, office: who.office, title }) : m('{office} no ha podido completar «{title}»', { office: who.office, title }));
     if (ok) awardPlayer(20);
     await sleep(8000);
     setStatus(actor, 'walking');
@@ -536,11 +537,11 @@ export function summon(agentId: string): boolean {
   if (!rt) return false;
   void enqueue(rt, async () => {
     setStatus(rt.actor, 'walking');
-    say(rt.actor, '¡Voy!', 2000);
+    say(rt.actor, t('¡Voy!'), 2000);
     await walkTo(rt.actor, spotNearPlayer(rt.actor));
     faceTowards(rt.actor, player);
     setStatus(rt.actor, 'visiting');
-    say(rt.actor, pick(['¿Me llamabas?', 'Dime, jefe', 'Aquí estoy', '¿Qué necesitas?']), 4000);
+    say(rt.actor, pick([t('¿Me llamabas?'), t('Dime, jefe'), t('Aquí estoy'), t('¿Qué necesitas?')]), 4000);
     await pause(rt, 120000);
   });
   return true;
@@ -555,12 +556,12 @@ export function dismiss(agentId: string): boolean {
 }
 
 const SMALL_TALK: [string, string][] = [
-  ['¿Qué tal vas con lo tuyo?', 'Bien, avanzando poco a poco'],
-  ['¿Un café luego?', '¡Venga, me apunto!'],
-  ['¿Viste el correo del jefe?', 'Sí… habrá que ponerse 😅'],
-  ['¿Me echas un ojo a una cosa?', 'Claro, enséñame'],
-  ['Menudo día llevamos', 'Ya te digo, no paro'],
-  ['¿Comemos juntos hoy?', 'Hecho, a las dos'],
+  [N('¿Qué tal vas con lo tuyo?'), N('Bien, avanzando poco a poco')],
+  [N('¿Un café luego?'), N('¡Venga, me apunto!')],
+  [N('¿Viste el correo del jefe?'), N('Sí… habrá que ponerse 😅')],
+  [N('¿Me echas un ojo a una cosa?'), N('Claro, enséñame')],
+  [N('Menudo día llevamos'), N('Ya te digo, no paro')],
+  [N('¿Comemos juntos hoy?'), N('Hecho, a las dos')],
 ];
 
 async function idle(rt: Runtime) {
@@ -584,9 +585,9 @@ async function idle(rt: Runtime) {
       setStatus(actor, 'break');
       if (!(await walkTo(actor, deskVisitor(mate.agent.desk))) || !alive()) return;
       face(actor, 'up');
-      say(actor, question, 3000);
+      say(actor, tr(question), 3000);
       if (!(await pause(rt, 2600))) return;
-      if (mate.actor.seated) say(mate.actor, answer, 3000);
+      if (mate.actor.seated) say(mate.actor, tr(answer), 3000);
       if (!(await pause(rt, 3200))) return;
     } else {
       setStatus(actor, 'break');
@@ -631,8 +632,8 @@ export function hire(data: Omit<Agent, 'id' | 'desk' | 'createdAt' | 'xp'>): Age
   store.saveAgent(agent);
   spawn(agent, map.entrance);
   reseat();
-  say(runtimes.get(agent.id)!.actor, '¡Hola a todos! 👋', 4000);
-  feed(`${agent.name} se incorpora como ${agent.role}`);
+  say(runtimes.get(agent.id)!.actor, t('¡Hola a todos! 👋'), 4000);
+  feed(m('{name} se incorpora como {role}', { name: agent.name, role: agent.role }));
   publishAgents();
   return agent;
 }
@@ -658,7 +659,7 @@ export function fire(id: string): boolean {
     store.setSetting('managerId', null);
     publishSettings();
   }
-  feed(`${rt.agent.name} deja la oficina`);
+  feed(m('{name} deja la oficina', { name: rt.agent.name }));
   publishAgents();
   publishTeams();
   return true;
@@ -720,9 +721,9 @@ export function applyLayout(input: unknown) {
 
 export function restaff(templateId: string) {
   const template = templateOf(templateId);
-  if (!template) throw new Error('Esa plantilla de equipo no existe.');
+  if (!template) throw new Error(t('Esa plantilla de equipo no existe.'));
   if (template.people.length > map.desks.length) {
-    throw new Error(`La plantilla trae ${template.people.length} personas y el plano tiene ${map.desks.length} mesas: amplíalo en el modo arquitecto.`);
+    throw new Error(t('La plantilla trae {v0} personas y el plano tiene {v1} mesas: amplíalo en el modo arquitecto.', { v0: template.people.length, v1: map.desks.length }));
   }
   for (const [id, rt] of [...runtimes]) {
     runtimes.delete(id);
@@ -738,7 +739,32 @@ export function restaff(templateId: string) {
     store.saveAgent(agent);
     spawn(agent, map.entrance);
   }
-  feed(`Se incorpora la plantilla «${template.name}»`);
+  feed(m('Se incorpora la plantilla «{name}»', { name: template.name }));
+  publishAgents();
+  publishTeams();
+  publishSettings();
+}
+
+export function switchLang(to: Lang) {
+  store.setSetting('lang', to);
+  for (const rt of runtimes.values()) {
+    const a = rt.agent;
+    const next = { role: relabel(a.role, to), personality: relabel(a.personality, to), instructions: relabel(a.instructions, to) };
+    if (next.role === a.role && next.personality === a.personality && next.instructions === a.instructions) continue;
+    Object.assign(a, next);
+    store.saveAgent(a);
+  }
+  for (const team of store.teams()) {
+    const next = { ...team, name: relabel(team.name, to), mission: relabel(team.mission, to) };
+    if (next.name !== team.name || next.mission !== team.mission) store.saveTeam(next);
+  }
+  for (const provider of store.providers()) {
+    const name = relabel(provider.name, to);
+    if (name !== provider.name) store.saveProvider({ ...provider, name });
+  }
+  const boss = store.setting<string | null>('playerName', null);
+  if (boss) store.setSetting('playerName', relabel(boss, to));
+  hub.broadcast({ type: 'map', map: mapData() });
   publishAgents();
   publishTeams();
   publishSettings();
@@ -783,7 +809,7 @@ export async function playerDance(spot: Cell, until: number) {
   setStatus(player, 'walking');
   if (!(await walkTo(player, spot)) || Date.now() > until) return;
   setStatus(player, 'dancing');
-  say(player, '¡Vamos!', 2500);
+  say(player, t('¡Vamos!'), 2500);
   setTimeout(() => player.status === 'dancing' && setStatus(player, 'idle'), Math.max(0, until - Date.now()));
 }
 

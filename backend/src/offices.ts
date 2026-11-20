@@ -4,6 +4,7 @@ import { assignRemoteTask, events, receiveVisitor } from './brain.js';
 import { store } from './db.js';
 import { hub } from './hub.js';
 import type { Appearance, Directory, DirectoryAgent, PeerRecord, RemoteTask, Task } from './types.js';
+import { m, t, type Msg } from './i18n.js';
 
 interface Link {
   send: (msg: unknown) => void;
@@ -16,7 +17,7 @@ const outbox = new Map<string, unknown[]>();
 const dialing = new Set<string>();
 const FALLBACK_LOOK: Appearance = { skin: '#f1c9a5', hair: 'short', hairColor: '#3b2a20', shirt: '#4f8cff', eyes: 'normal', accessory: 'none' };
 
-const feed = (text: string) => hub.broadcast({ type: 'feed', event: store.addFeed(text) });
+const feed = (msg: Msg) => hub.broadcast({ type: 'feed', event: store.addFeed(msg) });
 const peerOf = (id: string) => store.peers().find((p) => p.id === id);
 
 function officeId(): string {
@@ -28,7 +29,7 @@ function officeId(): string {
   return id;
 }
 
-const officeName = () => store.setting('officeName', 'Mi oficina');
+const officeName = () => store.setting('officeName', t('Mi oficina'));
 
 const PREFIX = process.env.LINK_PREFIX ?? '';
 const LOCAL = /^http:\/\/127\.0\.0\.1:\d+$/;
@@ -66,7 +67,7 @@ export const publishOffices = () => hub.broadcast({ type: 'offices', offices: of
 
 function directory(): Directory {
   return {
-    boss: store.setting('playerName', 'Jefe'),
+    boss: store.setting('playerName', t('Jefe')),
     agents: store.agents().map(({ id, name, role, teamId, appearance, companion, xp }) => ({ id, name, role, teamId, appearance, companion, xp })),
     teams: store.teams().map(({ id, name, color, leadId }) => ({ id, name, color, leadId })),
   };
@@ -78,7 +79,7 @@ function deliver(peerId: string, msg: unknown) {
   else outbox.set(peerId, [...(outbox.get(peerId) ?? []), msg].slice(-100));
 }
 
-function forget(peer: PeerRecord, reason: string) {
+function forget(peer: PeerRecord, reason: Msg) {
   links.get(peer.id)?.close();
   links.delete(peer.id);
   outbox.delete(peer.id);
@@ -107,18 +108,18 @@ function receive(peerId: string, msg: any) {
       return;
     }
     const first = !peer.officeId;
-    store.savePeer({ ...peer, name: String(msg.name ?? 'Oficina').slice(0, 60), officeId: String(msg.officeId) });
-    if (first) feed(`Conexión establecida con ${msg.name}`);
+    store.savePeer({ ...peer, name: String(msg.name ?? t('Oficina')).slice(0, 60), officeId: String(msg.officeId) });
+    if (first) feed(m('Conexión establecida con {name}', { name: msg.name }));
   } else if (msg.type === 'directory') {
     link.directory = msg.directory;
   } else if (msg.type === 'task') {
     const task = assignRemoteTask(
-      { peerId, taskId: String(msg.id), office: peer.name || 'otra oficina' },
+      { peerId, taskId: String(msg.id), office: peer.name || t('otra oficina') },
       msg.targetKind === 'team' ? 'team' : 'agent', String(msg.targetId), String(msg.title ?? '').slice(0, 200), String(msg.description ?? '').slice(0, 8000),
     );
     link.send(task
       ? { type: 'task-update', id: msg.id, status: 'working' }
-      : { type: 'task-update', id: msg.id, status: 'failed', result: 'El destinatario ya no existe en esa oficina.' });
+      : { type: 'task-update', id: msg.id, status: 'failed', result: t('El destinatario ya no existe en esa oficina.') });
     return;
   } else if (msg.type === 'task-update') {
     const task = store.remoteTasks().find((t) => t.id === msg.id && t.peerId === peerId);
@@ -129,12 +130,12 @@ function receive(peerId: string, msg: any) {
     const mine = store.tasks(500).filter((t) => t.origin?.peerId === peerId);
     for (const id of Array.isArray(msg.ids) ? msg.ids : []) {
       const task = mine.find((t) => t.origin?.taskId === id);
-      if (!task) link.send({ type: 'task-update', id, status: 'failed', result: 'La otra oficina no tiene constancia de este encargo.' });
+      if (!task) link.send({ type: 'task-update', id, status: 'failed', result: t('La otra oficina no tiene constancia de este encargo.') });
       else if (task.status === 'done' || task.status === 'failed') link.send(updateFor(task));
     }
     return;
   } else if (msg.type === 'bye') {
-    forget(peer, `${peer.name} ha cerrado la conexión`);
+    forget(peer, m('{name} ha cerrado la conexión', { name: peer.name }));
     return;
   } else {
     return;
@@ -212,7 +213,7 @@ function dial(peer: PeerRecord) {
     dialing.delete(peer.id);
     dropped(peer.id, link);
     const current = peerOf(peer.id);
-    if (e.code === 4401 && current) forget(current, `${current.name} ya no acepta la conexión`);
+    if (e.code === 4401 && current) forget(current, m('{name} ya no acepta la conexión', { name: current.name }));
   });
 }
 
@@ -225,14 +226,14 @@ export function inviteToken(local = false): string {
 
 export function createInvite(url: string): string {
   const clean = baseOf(url);
-  if (!/^https?:\/\/\S+$/.test(clean)) throw new Error('La dirección de enlace debe empezar por http:// o https://');
+  if (!/^https?:\/\/\S+$/.test(clean)) throw new Error(t('La dirección de enlace debe empezar por http:// o https://'));
   setLinkBase(clean);
   return Buffer.from(JSON.stringify({ u: linkUrl(), t: inviteToken() })).toString('base64url');
 }
 
 export function joinWith(url: string, token: string) {
-  if (!token || !/^https?:\/\//.test(url)) throw new Error('El código de invitación no es válido.');
-  if (store.peers().some((p) => p.token === token)) throw new Error('Ese código ya está en uso en esta oficina.');
+  if (!token || !/^https?:\/\//.test(url)) throw new Error(t('El código de invitación no es válido.'));
+  if (store.peers().some((p) => p.token === token)) throw new Error(t('Ese código ya está en uso en esta oficina.'));
   const peer: PeerRecord = { id: randomUUID(), name: '', url, token, direction: 'out', officeId: '', createdAt: Date.now(), local: LOCAL.test(url) };
   store.savePeer(peer);
   publishOffices();
@@ -251,7 +252,7 @@ export function joinOffice(code: string) {
   try {
     data = JSON.parse(Buffer.from(code.trim(), 'base64url').toString('utf8'));
   } catch {
-    throw new Error('El código de invitación no es válido.');
+    throw new Error(t('El código de invitación no es válido.'));
   }
   joinWith(String(data.u ?? ''), String(data.t ?? ''));
 }
@@ -260,24 +261,24 @@ export function leaveOffice(id: string) {
   const peer = peerOf(id);
   if (!peer) return;
   links.get(id)?.send({ type: 'bye' });
-  setTimeout(() => forget(peer, `Has cerrado la conexión con ${peer.name}`), 150);
+  setTimeout(() => forget(peer, m('Has cerrado la conexión con {name}', { name: peer.name })), 150);
 }
 
 export function sendRemoteTask(peerId: string, targetKind: 'agent' | 'team', targetId: string, title: string, description: string): RemoteTask {
   const peer = peerOf(peerId);
   const link = links.get(peerId);
-  if (!peer || !link) throw new Error('Esa oficina no está conectada ahora mismo.');
+  if (!peer || !link) throw new Error(t('Esa oficina no está conectada ahora mismo.'));
   const target = targetKind === 'team'
     ? link.directory?.teams.find((t) => t.id === targetId)
     : link.directory?.agents.find((a) => a.id === targetId);
-  if (!target) throw new Error('El destinatario no existe en esa oficina.');
+  if (!target) throw new Error(t('El destinatario no existe en esa oficina.'));
   const task: RemoteTask = {
     id: randomUUID(), peerId, targetKind, targetId, targetName: target.name, title, description, status: 'sent', result: '',
     createdAt: Date.now(), finishedAt: null,
   };
   store.saveRemoteTask(task);
   link.send({ type: 'task', id: task.id, targetKind, targetId, title, description });
-  feed(`Envías un encargo a ${target.name} (${peer.name}): «${title}»`);
+  feed(m('Envías un encargo a {name} ({name2}): «{title}»', { name: target.name, name2: peer.name, title }));
   publishOffices();
   return task;
 }

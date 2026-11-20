@@ -1,9 +1,10 @@
 import { hub } from './hub.js';
 import { map, type Cell } from './map.js';
 import { feed, gather, playerDance, presentIds, speak } from './brain.js';
+import { m, N, t, tr } from './i18n.js';
 
 const PARTY_MS = 45000;
-const CHEERS = ['🎉', '🕺', '💃', '🎶', '¡Eso es!', '¡Temazo!', '¡Bravo, equipo!', '🥳', '¡Otra, otra!', '✨'];
+const CHEERS = ['🎉', '🕺', '💃', '🎶', N('¡Eso es!'), N('¡Temazo!'), N('¡Bravo, equipo!'), '🥳', N('¡Otra, otra!'), '✨'];
 
 let until = 0;
 
@@ -26,11 +27,11 @@ export function startParty(): number {
   const floor = gather(ids, spots.slice(1).length ? spots.slice(1) : spots, 'dancing');
   void playerDance(spots[0], until);
   hub.broadcast({ type: 'party', until });
-  feed('¡Fiesta en la zona lúdica! Todo el mundo a bailar');
+  feed(m('¡Fiesta en la zona lúdica! Todo el mundo a bailar'));
   const cheer = setInterval(() => {
     const here = floor.present();
     if (!here.length) return;
-    speak(here[Math.floor(Math.random() * here.length)], CHEERS[Math.floor(Math.random() * CHEERS.length)], 2200);
+    speak(here[Math.floor(Math.random() * here.length)], tr(CHEERS[Math.floor(Math.random() * CHEERS.length)]), 2200);
   }, 1800);
   setTimeout(() => {
     clearInterval(cheer);

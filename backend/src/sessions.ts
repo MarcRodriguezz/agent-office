@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { store } from './db.js';
 import { hub } from './hub.js';
 import type { Agent, Connection, LlmMessage, LlmResult, Provider, Work, WorkSession } from './types.js';
+import { t } from './i18n.js';
 
 const HISTORY = 30;
 const CLIP = 6000;
 
 const clip = (text: string) => (text.length > CLIP ? `${text.slice(0, CLIP)}…` : text);
 const titleOf = (text: string) => {
-  const line = text.trim().split('\n').find((l) => l.trim() && !l.startsWith('Tu jefe') && !l.startsWith('Título:')) ?? text;
+  const line = text.trim().split('\n').find((l) => l.trim() && !l.startsWith(t('Tu jefe')) && !l.startsWith(t('Título:'))) ?? text;
   const clean = line.replace(/^(Título|Encargo):\s*/i, '').trim();
   return clean.length > 60 ? `${clean.slice(0, 57)}…` : clean;
 };
@@ -75,7 +76,7 @@ export function closeCurrent(agent: Agent) {
 
 export function reopenSession(id: string): WorkSession {
   const session = store.session(id);
-  if (!session) throw new Error('Esa sesión ya no existe.');
+  if (!session) throw new Error(t('Esa sesión ya no existe.'));
   for (const s of store.sessions()) {
     if (s.id !== id && s.agentId === session.agentId && s.projectId === session.projectId && s.status === 'open') {
       store.saveSession({ ...s, status: 'closed' });
