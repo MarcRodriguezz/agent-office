@@ -17,14 +17,14 @@ Only a preset is needed. In `web/src/ui/SettingsModal.tsx`, add an entry to `PRE
   help: 'Dónde se consigue la API key y qué hay que saber.' },
 ```
 
-The interface is in Spanish, so `group` and `help` stay in Spanish. For local servers, the URL must use `host.docker.internal`. Add the matching row in `docs/PROVIDERS.md`.
+`label`, `group` and `help` are written in Spanish inside `t('…')` and need their English entry in `web/src/i18n-en.ts`. For local servers, the URL must use `host.docker.internal`. Add the matching row in `docs/PROVIDERS.md`.
 
 ## Case B: it needs its own adapter
 
 1. **Kind.** Add the new value to `ProviderKind` in `backend/src/types.ts` and `web/src/types.ts`, and to the `KINDS` list in `backend/src/routes.ts`.
 2. **Adapter.** In `backend/src/providers.ts` write a function `(job: LlmJob) => Promise<LlmResult>` and add it to the `switch` in `runProvider`. Rules:
    - It receives `job.system`, `job.messages` (run them through `normalize`), `job.provider` (URL, key, model, command) and `job.work` (folder, permissions, credentials and session).
-   - It returns only the final text. If there is no text, throw an `Error` with a clear message in Spanish: it is what the user sees in the connection test.
+   - It returns only the final text. If there is no text, throw an `Error` with a clear message through `t('…')` and add its English in `backend/src/i18n-en.ts`: it is what the user sees in the connection test, in their language.
    - Put a timeout on the call.
    - Apply the agent's permissions (`job.work.access`) with the same meaning as the other adapters: see decision 19 in `docs/DECISIONS.md`.
    - If it is a CLI, use `runCli` and `flatten(job)`; the binary must be installed in `backend/Dockerfile`.
@@ -41,4 +41,4 @@ cd ../web && npx tsc --noEmit
 docker compose up -d --build
 ```
 
-In the interface: connect the provider and press **Guardar y probar**. Then assign it to an agent and ask it something in the chat. Adapter errors show up in `docker compose logs worker`.
+In the interface: connect the provider and press **Save and test**. Then assign it to an agent and ask it something in the chat. Adapter errors show up in `docker compose logs worker`.

@@ -65,7 +65,7 @@ Open `http://localhost:8080` and check:
 
 | Symptom | Likely cause |
 |---|---|
-| The web loads but says «reconectando…» | `server` is down: `docker compose logs server`. |
+| The web loads but says «reconnecting…» | `server` is down: `docker compose logs server`. |
 | Port 8080 is busy | Change `OFFICE_PORT` in `.env`. |
 | A local provider does not connect | The URL must use `host.docker.internal`, not `localhost`. |
 | `claude` or `codex` do not exist in the worker | The image was built with `INSTALL_AGENT_CLIS=false`. |

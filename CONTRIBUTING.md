@@ -36,7 +36,20 @@ cd ../web && npm ci && npm run build:demo && npx vite preview --outDir dist-demo
 - **No graphic assets**: everything is drawn in code. Creatures are original; nothing from existing games.
 - **Install and login commands come from the tool catalogue** (`backend/src/tools.ts`); no free terminal.
 - **Backend code shared with the demo must run in the browser.** A new store method needs its twin in `web/demo/db.ts`.
-- **Language:** the interface and the prompts are in Spanish; documentation and commit messages are in English.
+- **Language:** documentation and commit messages are in English. The interface and the prompts are written in Spanish in the code and translated to English through the dictionaries (see below).
+
+## Texts in the interface and the prompts
+
+Every text a person or an agent reads goes through a translation function. The Spanish text is the key, and the English one lives in a dictionary:
+
+- **Interface** (`web/src`): `t('Texto')` from `web/src/i18n.ts`, with the English in `web/src/i18n-en.ts`.
+- **Server, worker and prompts** (`backend/src`): `t('Texto')` from `backend/src/i18n.ts`, with the English in `backend/src/i18n-en.ts`. It uses the office language, or the job's language inside the worker.
+- **Placeholders:** `t('{name} entrega «{title}»', { name, title })`. The English text must keep the same `{placeholders}`; a test checks it.
+- **Activity feed:** `feed(m('…', params))` stores the message, not the text, so each browser shows it in its own language.
+- **Module-level constants** in the backend use `N('…')` to declare the key and `tr(value)` where they are used, because the office language can change while the process runs.
+- **Plurals:** one key per form, chosen in code (`n === 1 ? t('mesa') : t('mesas')`, or a whole sentence per form); never an untranslated word inside a ternary.
+
+A Spanish text without its English entry does not compile: the keys are typed.
 
 ## Code style
 

@@ -96,7 +96,7 @@ Record of the decisions taken, with their reason and what was discarded. Decisio
 
 ## 11. Language
 
-**Decision:** the interface and the prompts are in Spanish; the agents answer in the language they are spoken to. Documentation, code-related notes and commit messages are in English (changed on 2026-11-17, see decision 25).
+**Decision:** the interface and the prompts are available in Spanish and English (decision 29); the agents also answer in the language they are spoken to. Documentation, code-related notes and commit messages are in English (changed on 2026-11-17, see decision 25).
 
 ## 12. Creature RPG layer: compis, experience and evolution
 
@@ -259,7 +259,7 @@ Record of the decisions taken, with their reason and what was discarded. Decisio
 
 ## 24. Fun zone and celebrations
 
-**Decision:** a new room kind, the *fun zone*, with a dance floor, jukebox, speakers, arcade machines, ping-pong table and beanbags. The **Celebrar** button (or the jukebox) starts a 45-second party: every agent and the boss go to the dance floor and dance, with lights, a disco ball, confetti and cheers.
+**Decision:** a new room kind, the *fun zone*, with a dance floor, jukebox, speakers, arcade machines, ping-pong table and beanbags. The **Celebrate** button (or the jukebox) starts a 45-second party: every agent and the boss go to the dance floor and dance, with lights, a disco ball, confetti and cheers.
 
 **Reason:** the office should also celebrate finished work. It is a moment that involves everyone and makes the office feel alive.
 
@@ -271,7 +271,7 @@ Record of the decisions taken, with their reason and what was discarded. Decisio
 
 ## 25. Documentation in English
 
-**Decision:** the README, the documents in `docs/`, the project skills and the commit messages are written in English. The interface and the prompts stay in Spanish.
+**Decision:** the README, the documents in `docs/`, the project skills and the commit messages are written in English. The interface and the prompts were in Spanish until decision 29 made them bilingual.
 
 **Reason:** the repository is meant to be shown and shared; English makes it readable for more people. The office itself is still used in Spanish, so the documentation quotes the interface labels as they appear on screen.
 
@@ -298,6 +298,23 @@ Record of the decisions taken, with their reason and what was discarded. Decisio
 **Reason:** the riskiest parts are the permission limits, the floor plan validation and the multi-agent flows. Testing them on the real code paths, without Redis or a model, keeps the tests fast (about 30 seconds) and free, and avoids adding dependencies.
 
 **Details:** module mocking is still experimental in Node 24, so the test script enables it with `--experimental-test-module-mocks`. The interface is not covered by automated tests yet.
+
+## 29. Interface and agents in Spanish and English
+
+**Decision:** the whole office works in Spanish or English. The Spanish text in the code is the translation key, and each side has a typed English dictionary (`web/src/i18n-en.ts`, `backend/src/i18n-en.ts`). Each office stores its language; the browser keeps the visitor's choice and the office follows it when opened. Switching reloads the page.
+
+**Reason:** the public demo and the documentation are in English, but the office could only be used in Spanish. Two languages cover both audiences without a translation library or a build step.
+
+**Details:**
+- **Spanish text as the key.** The code stays readable, and the dictionary keys are a TypeScript type: a text without its translation does not compile. A test checks that both versions keep the same placeholders.
+- **The activity feed is stored as messages** (key and parameters), so its history follows the language of whoever reads it. Conversations and results are content: they stay in the language they were written in.
+- **The office language reaches the prompts.** The agents receive their instructions, the meeting rules and the delivery formats in that language, so they think and answer in it. In the worker, each job carries its language and an `AsyncLocalStorage` makes it the current one for that job only.
+- **Switching relabels only what the office wrote.** The default room names, the team templates and the default names (office, boss, mock brain) change language; anything the user typed or renamed is left alone.
+- **Reloading on a switch** is simpler than making every module-level constant reactive, and the state lives on the server anyway. In the browser demo, reloading starts the demo over, as it already did.
+- **No i18n library.** About a thousand texts with simple placeholders do not need plural rules or ICU messages; plurals use one key per form.
+- **Docker:** the web image is built from the repository root because the browser shows feed messages with the backend dictionary.
+
+**Discarded:** keys such as `team.hire.button` (the code loses its meaning and every text needs a name), a translation library (more dependencies for two languages), and keeping the agents' prompts only in Spanish (agents would drift back to Spanish in an English office).
 
 ## Known limitations and next steps
 
